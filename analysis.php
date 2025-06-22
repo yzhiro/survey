@@ -73,6 +73,28 @@ function get_f_critical_value($df1, $df2, $alpha = 0.05)
     return $table[$df1][$found_key] ?? 999;
 }
 
+function get_q_critical_value($k, $df, $alpha = 0.05)
+{
+    if ($alpha != 0.05) return 999;
+    $q_table = [
+        2 => [10 => 3.15, 15 => 3.01, 20 => 2.95, 30 => 2.89, 40 => 2.86, 60 => 2.83, 120 => 2.80, 'inf' => 2.77],
+        3 => [10 => 3.88, 15 => 3.67, 20 => 3.58, 30 => 3.49, 40 => 3.44, 60 => 3.40, 120 => 3.36, 'inf' => 3.31],
+        4 => [10 => 4.33, 15 => 4.08, 20 => 3.96, 30 => 3.85, 40 => 3.79, 60 => 3.74, 120 => 3.68, 'inf' => 3.63],
+        5 => [10 => 4.65, 15 => 4.37, 20 => 4.23, 30 => 4.10, 40 => 4.04, 60 => 3.98, 120 => 3.92, 'inf' => 3.86],
+        6 => [10 => 4.91, 15 => 4.60, 20 => 4.45, 30 => 4.30, 40 => 4.23, 60 => 4.17, 120 => 4.10, 'inf' => 4.03],
+    ];
+    if (!isset($q_table[$k])) return 999;
+    $df_keys = array_keys($q_table[$k]);
+    $found_key = 'inf';
+    foreach (array_reverse($df_keys) as $key) {
+        if ($df >= $key && $key !== 'inf') {
+            $found_key = $key;
+            break;
+        }
+    }
+    return $q_table[$k][$found_key] ?? 999;
+}
+
 function calculate_anova($data, $group_key, $value_key)
 {
     $groups = [];
@@ -117,6 +139,7 @@ function calculate_anova($data, $group_key, $value_key)
         $significance_level = 0.05;
     }
     return [
+        'groups' => $groups,
         'df_between' => $df_between,
         'ss_between' => $ss_between,
         'ms_between' => $ms_between,
@@ -128,6 +151,37 @@ function calculate_anova($data, $group_key, $value_key)
         'critical_value_01' => $f_crit_01,
         'significance_level' => $significance_level
     ];
+}
+
+function calculate_tukey_hsd($groups, $ms_within, $df_within)
+{
+    $k = count($groups);
+    if ($k < 2 || $df_within <= 0 || $ms_within <= 0) return [];
+    $q_critical = get_q_critical_value($k, $df_within, 0.05);
+    $group_names = array_keys($groups);
+    $results = [];
+    for ($i = 0; $i < $k; $i++) {
+        for ($j = $i + 1; $j < $k; $j++) {
+            $name1 = $group_names[$i];
+            $name2 = $group_names[$j];
+            $group1 = $groups[$name1];
+            $group2 = $groups[$name2];
+            $n1 = count($group1);
+            $n2 = count($group2);
+            if ($n1 == 0 || $n2 == 0) continue;
+            $mean1 = array_sum($group1) / $n1;
+            $mean2 = array_sum($group2) / $n2;
+            $mean_diff = abs($mean1 - $mean2);
+            $hsd = $q_critical * sqrt(($ms_within / 2) * (1 / $n1 + 1 / $n2));
+            $results[] = [
+                'pair' => "{$name1} vs {$name2}",
+                'mean_diff' => $mean_diff,
+                'hsd' => $hsd,
+                'is_significant' => ($mean_diff > $hsd)
+            ];
+        }
+    }
+    return $results;
 }
 
 function calculate_two_way_anova($data, $factorA_key, $factorB_key, $value_key)
@@ -326,6 +380,11 @@ $selected_question_key = $_POST['analysis_question'] ?? 'q2';
 // 一元配置用
 $selected_group_key = $_POST['analysis_group'] ?? 'gender';
 $anova_result = ($total_count > 10) ? calculate_anova($survey_data, $selected_group_key, $selected_question_key) : false;
+$tukey_result = null;
+if ($anova_result && $anova_result['significance_level'] > 0) {
+    $tukey_result = calculate_tukey_hsd($anova_result['groups'], $anova_result['ms_within'], $anova_result['df_within']);
+}
+
 // 二元配置用
 $factorA_key = $_POST['factor_a'] ?? 'age_group';
 $factorB_key = $_POST['factor_b'] ?? 'gender';
@@ -442,7 +501,7 @@ if ($anova2_result) {
                     </form>
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div>
-                            <h3 class="font-semibold text-center mb-2"><?php echo htmlspecialchars($group_text_map[$selected_group_key]); ?>別の「<?php echo htmlspecialchars($questions_text[$selected_question_key]); ?>」平均評価<?php if ($anova_result && $anova_result['significance_level'] > 0): ?><span class="text-red-500 font-bold text-lg"><?php echo ($anova_result['significance_level'] == 0.01) ? '**' : '*'; ?></span><?php endif; ?></h3>
+                            <h3 class="font-semibold text-center mb-2"><?php echo htmlspecialchars($group_text_map[$selected_group_key] ?? ''); ?>別の「<?php echo htmlspecialchars($questions_text[$selected_question_key] ?? ''); ?>」平均評価<?php if ($anova_result && $anova_result['significance_level'] > 0): ?><span class="text-red-500 font-bold text-lg"><?php echo ($anova_result['significance_level'] == 0.01) ? '**' : '*'; ?></span><?php endif; ?></h3>
                             <canvas id="crossAnalysisChart" class="p-4"></canvas>
                         </div>
                         <div>
@@ -493,6 +552,26 @@ if ($anova2_result) {
                                 <?php else: ?><div class="mt-4 bg-orange-100 border-l-4 border-orange-500 text-orange-800 p-4 rounded-lg shadow">
                                         <p class="font-bold text-lg">結論: 有意差なし (p >= 0.05)</p>
                                         <p class="mt-1">F値(<?php echo round($anova_result['f_value'], 2); ?>)は5%水準の臨界値(<?php echo round($anova_result['critical_value_05'], 2); ?>)を下回り、見られた差は**統計的に偶然の範囲**と判断されます。</p>
+                                    </div><?php endif; ?>
+                                <?php if (isset($tukey_result) && !empty($tukey_result)): ?><div class="mt-6 pt-4 border-t">
+                                        <h3 class="font-semibold mb-2">多重比較 (テューキーのHSD法) の結果</h3>
+                                        <p class="text-sm text-gray-600 mb-3">具体的にどのグループ間に差があるかを示します。</p>
+                                        <div class="overflow-x-auto">
+                                            <table class="w-full text-sm text-left text-gray-500">
+                                                <thead class="text-xs text-gray-700 uppercase bg-gray-100">
+                                                    <tr>
+                                                        <th class="px-4 py-2">比較ペア</th>
+                                                        <th class="px-4 py-2">平均値の差</th>
+                                                        <th class="px-4 py-2">判定</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody><?php foreach ($tukey_result as $result): ?><tr class="bg-white border-b">
+                                                            <td class="px-4 py-2 font-medium"><?php echo htmlspecialchars($result['pair']); ?></td>
+                                                            <td class="px-4 py-2"><?php echo round($result['mean_diff'], 2); ?></td>
+                                                            <td class="px-4 py-2 font-bold <?php echo $result['is_significant'] ? 'text-red-500' : 'text-gray-500'; ?>"><?php echo $result['is_significant'] ? '有意差あり' : '有意差なし'; ?></td>
+                                                        </tr><?php endforeach; ?></tbody>
+                                            </table>
+                                        </div>
                                     </div><?php endif; ?>
                             <?php else: ?><p class="text-center text-gray-500 p-4">分散分析を行うには、各グループに複数のデータが必要です。</p><?php endif; ?>
                         </div>
@@ -556,21 +635,17 @@ if ($anova2_result) {
                 </div>
             <?php endif; ?>
             </div>
-
             <script>
                 document.addEventListener('DOMContentLoaded', function() {
                     const tabs = document.querySelectorAll('.tab-button');
                     const tabContents = document.querySelectorAll('.tab-content');
-
                     tabs.forEach(tab => {
                         tab.addEventListener('click', () => {
                             const target = document.querySelector(tab.dataset.tabTarget);
-
                             tabContents.forEach(content => {
                                 content.classList.add('hidden');
                             });
                             if (target) target.classList.remove('hidden');
-
                             tabs.forEach(t => {
                                 t.classList.remove('active');
                             });
