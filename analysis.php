@@ -1,43 +1,120 @@
 <?php
 session_start();
-// submit.phpからのメッセージと自分のスコアを受け取る
-if (isset($_SESSION['message'])) {
-    $flash_message = $_SESSION['message'];
-    unset($_SESSION['message']);
-} else {
-    $flash_message = null;
-}
-if (isset($_SESSION['my_score'])) {
-    $my_score_data = $_SESSION['my_score'];
-    unset($_SESSION['my_score']); // 1回表示したら削除
-} else {
-    $my_score_data = null;
-}
+// データベース接続ファイルを読み込む
+require_once 'db_connect.php';
 
-// フォーム送信があったかどうかでアクティブなタブを決定
-$active_tab = 'simple'; // デフォルト
-if (isset($_POST['submit_simple'])) {
-    $active_tab = 'simple';
-} elseif (isset($_POST['submit_advanced'])) {
-    $active_tab = 'advanced';
-}
+// --- セッションデータ処理 ---
+$flash_message = $_SESSION['message'] ?? null;
+$my_score_data = $_SESSION['my_score'] ?? null;
+unset($_SESSION['message'], $_SESSION['my_score']);
 
-function load_survey_data()
+// --- タブ表示制御 ---
+$active_tab = isset($_POST['submit_advanced']) ? 'advanced' : 'simple';
+
+// =================================================================
+//  データ取得・処理関数
+// =================================================================
+
+/**
+ * 総回答者数を取得する
+ * @return int
+ */
+function get_total_count()
 {
-    $file_name = 'data.txt';
-    $survey_data = [];
-    if (file_exists($file_name)) {
-        $lines = file($file_name, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        foreach ($lines as $line) {
-            $decoded_line = json_decode($line, true);
-            if (is_array($decoded_line)) {
-                $survey_data[] = $decoded_line;
-            }
-        }
+    try {
+        $pdo = get_pdo_connection();
+        return (int)$pdo->query("SELECT COUNT(*) FROM survey_db")->fetchColumn();
+    } catch (PDOException $e) {
+        return 0;
     }
-    return $survey_data;
 }
 
+/**
+ * 回答者の属性（性別、年代、年収層）の分布データを取得する
+ * @return array
+ */
+function get_demographics_data()
+{
+    $pdo = get_pdo_connection();
+    $data = ['gender' => [], 'age' => [], 'income' => []];
+
+    try {
+        // 性別
+        $stmt_gender = $pdo->query("SELECT gender, COUNT(*) as count FROM survey_db GROUP BY gender");
+        while ($row = $stmt_gender->fetch()) {
+            $data['gender'][$row['gender']] = $row['count'];
+        }
+
+        // 年代
+        $stmt_age = $pdo->query("SELECT CASE WHEN age < 30 THEN '20代以下' WHEN age BETWEEN 30 AND 39 THEN '30代' WHEN age BETWEEN 40 AND 49 THEN '40代' WHEN age BETWEEN 50 AND 59 THEN '50代' ELSE '60代以上' END as age_group, COUNT(*) as count FROM survey_db GROUP BY age_group ORDER BY age_group");
+        while ($row = $stmt_age->fetch()) {
+            $data['age'][$row['age_group']] = $row['count'];
+        }
+
+        // 年収層
+        $stmt_income = $pdo->query("SELECT CASE WHEN income < 400 THEN '400万円未満' WHEN income BETWEEN 400 AND 799 THEN '400～800万円' ELSE '800万円以上' END as income_group, COUNT(*) as count FROM survey_db GROUP BY income_group ORDER BY income_group");
+        while ($row = $stmt_income->fetch()) {
+            $data['income'][$row['income_group']] = $row['count'];
+        }
+    } catch (PDOException $e) {
+        // エラー時は空のデータを返す
+        return ['gender' => [], 'age' => [], 'income' => []];
+    }
+    return $data;
+}
+
+/**
+ * 全質問の全体の平均スコアを取得する
+ * @return array
+ */
+function get_radar_avg_scores()
+{
+    $pdo = get_pdo_connection();
+    try {
+        $query = "SELECT AVG(q1), AVG(q2), AVG(q3), AVG(q4), AVG(q5), AVG(q6), AVG(q7), AVG(q8), AVG(q9), AVG(q10) FROM survey_db";
+        return $pdo->query($query)->fetch(PDO::FETCH_NUM);
+    } catch (PDOException $e) {
+        return array_fill(0, 10, 0); // エラー時は0で埋めた配列を返す
+    }
+}
+
+/**
+ * 詳細な分析（ANOVAなど）のために全データを取得する
+ * @return array
+ */
+function get_all_survey_data()
+{
+    $pdo = get_pdo_connection();
+    try {
+        $stmt = $pdo->query("SELECT age, income, gender, disability, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10 FROM survey_db");
+        $results = $stmt->fetchAll();
+
+        // analysis.phpの既存ロジックが期待する形式にデータを再構築する
+        $survey_data = [];
+        foreach ($results as $row) {
+            $answers = [];
+            for ($i = 1; $i <= 10; $i++) {
+                $q_key = 'q' . $i;
+                $answers[$q_key] = $row[$q_key];
+            }
+            $survey_data[] = [
+                'age' => $row['age'],
+                'gender' => $row['gender'],
+                'income' => $row['income'],
+                'disability' => $row['disability'],
+                'answers' => $answers,
+            ];
+        }
+        return $survey_data;
+    } catch (PDOException $e) {
+        return [];
+    }
+}
+
+
+// =================================================================
+//  統計処理関数 (このセクションは変更ありません)
+// =================================================================
 function get_f_critical_value($df1, $df2, $alpha = 0.05)
 {
     // α=0.05 (5%水準)
@@ -60,11 +137,12 @@ function get_f_critical_value($df1, $df2, $alpha = 0.05)
     ];
 
     $table = ($alpha == 0.01) ? $f_table_01 : $f_table_05;
-    $df1 = max(1, min(count($table), $df1));
+    if (!isset($table[$df1])) return 999; // 自由度1が存在しない場合
     $df2_keys_numeric = array_filter(array_keys($table[$df1]), 'is_numeric');
-    sort($df2_keys_numeric);
+    if (empty($df2_keys_numeric)) return 999;
+    rsort($df2_keys_numeric);
     $found_key = 'inf';
-    foreach (array_reverse($df2_keys_numeric) as $key) {
+    foreach ($df2_keys_numeric as $key) {
         if ($df2 >= $key) {
             $found_key = $key;
             break;
@@ -87,7 +165,7 @@ function get_q_critical_value($k, $df, $alpha = 0.05)
     $df_keys = array_keys($q_table[$k]);
     $found_key = 'inf';
     foreach (array_reverse($df_keys) as $key) {
-        if ($df >= $key && $key !== 'inf') {
+        if ($key !== 'inf' && $df >= $key) {
             $found_key = $key;
             break;
         }
@@ -173,12 +251,7 @@ function calculate_tukey_hsd($groups, $ms_within, $df_within)
             $mean2 = array_sum($group2) / $n2;
             $mean_diff = abs($mean1 - $mean2);
             $hsd = $q_critical * sqrt(($ms_within / 2) * (1 / $n1 + 1 / $n2));
-            $results[] = [
-                'pair' => "{$name1} vs {$name2}",
-                'mean_diff' => $mean_diff,
-                'hsd' => $hsd,
-                'is_significant' => ($mean_diff > $hsd)
-            ];
+            $results[] = ['pair' => "{$name1} vs {$name2}", 'mean_diff' => $mean_diff, 'hsd' => $hsd, 'is_significant' => ($mean_diff > $hsd)];
         }
     }
     return $results;
@@ -191,7 +264,7 @@ function calculate_two_way_anova($data, $factorA_key, $factorB_key, $value_key)
     $factorB_levels = [];
     $all_values = [];
     foreach ($data as $row) {
-        if (!isset($row[$factorA_key]) || !isset($row[$factorB_key]) || !isset($row['answers'][$value_key])) continue;
+        if (!isset($row[$factorA_key], $row[$factorB_key], $row['answers'][$value_key])) continue;
         $a = $row[$factorA_key];
         $b = $row[$factorB_key];
         $val = $row['answers'][$value_key];
@@ -291,33 +364,28 @@ function calculate_two_way_anova($data, $factorA_key, $factorB_key, $value_key)
     ];
 }
 
-// --- データ処理 ---
-$survey_data = load_survey_data();
-foreach ($survey_data as $key => $row) {
-    $age = $row['age'] ?? 0;
-    if ($age < 30) {
-        $age_group = '20代以下';
-    } elseif ($age < 40) {
-        $age_group = '30代';
-    } elseif ($age < 50) {
-        $age_group = '40代';
-    } elseif ($age < 60) {
-        $age_group = '50代';
-    } else {
-        $age_group = '60代以上';
-    }
-    $survey_data[$key]['age_group'] = $age_group;
-    $income = $row['income'] ?? 0;
-    if ($income < 400) {
-        $income_group = '400万円未満';
-    } elseif ($income < 800) {
-        $income_group = '400～800万円';
-    } else {
-        $income_group = '800万円以上';
-    }
-    $survey_data[$key]['income_group'] = $income_group;
+
+// =================================================================
+//  メイン処理
+// =================================================================
+
+$total_count = get_total_count();
+$survey_data = []; // 詳細分析用のデータは後で読み込む
+$demographics = [];
+$gender_dist_counts = [];
+$age_dist_counts = [];
+$income_dist_counts = [];
+$radar_avg_scores = [];
+
+if ($total_count > 0) {
+    $demographics = get_demographics_data();
+    $gender_dist_counts = $demographics['gender'];
+    $age_dist_counts = $demographics['age'];
+    $income_dist_counts = $demographics['income'];
+    $radar_avg_scores = get_radar_avg_scores();
 }
-$total_count = count($survey_data);
+
+// 質問項目とグループの定義
 $questions_text = [
     'q1' => 'ドキュメンタリー動画への興味',
     'q2' => 'VR仮想旅行への興味',
@@ -332,41 +400,7 @@ $questions_text = [
 ];
 $group_text_map = ['gender' => '性別', 'age_group' => '年代', 'income_group' => '年収層', 'disability' => '障害有無'];
 
-// 全体集計グラフ用データ
-$gender_dist_counts = [];
-$age_dist_counts = [];
-$income_dist_counts = [];
-$radar_avg_scores = [];
-if ($total_count > 0) {
-    $gender_dist_counts = array_count_values(array_column($survey_data, 'gender'));
-    $age_dist_counts = array_count_values(array_column($survey_data, 'age_group'));
-    ksort($age_dist_counts);
-    $income_dist_counts = array_count_values(array_column($survey_data, 'income_group'));
-    ksort($income_dist_counts);
-    $answer_dist = [];
-    foreach (array_keys($questions_text) as $q_key) {
-        $answer_dist[$q_key] = array_fill(1, 5, 0);
-    }
-    foreach ($survey_data as $row) {
-        foreach ($row['answers'] as $q_key => $answer) {
-            if (isset($answer_dist[$q_key][$answer])) {
-                $answer_dist[$q_key][$answer]++;
-            }
-        }
-    }
-    foreach ($answer_dist as $q_key => $counts) {
-        $total_score = 0;
-        $total_responses = array_sum($counts);
-        if ($total_responses > 0) {
-            foreach ($counts as $score => $count) {
-                $total_score += $score * $count;
-            }
-            $radar_avg_scores[] = $total_score / $total_responses;
-        } else {
-            $radar_avg_scores[] = 0;
-        }
-    }
-}
+// 自分のスコアをレーダーチャート用に整形
 $my_score_for_chart = null;
 if ($my_score_data) {
     $my_score_for_chart = [];
@@ -375,25 +409,66 @@ if ($my_score_data) {
     }
 }
 
-// 分析パラメータの受け取りと実行
+// --- 分析パラメータの受け取りと実行 ---
 $selected_question_key = $_POST['analysis_question'] ?? 'q2';
-// 一元配置用
-$selected_group_key = $_POST['analysis_group'] ?? 'gender';
-$anova_result = ($total_count > 10) ? calculate_anova($survey_data, $selected_group_key, $selected_question_key) : false;
+
+// 詳細な分析が必要な場合のみ、全データを読み込んで処理
+$anova_result = false;
 $tukey_result = null;
-if ($anova_result && $anova_result['significance_level'] > 0) {
-    $tukey_result = calculate_tukey_hsd($anova_result['groups'], $anova_result['ms_within'], $anova_result['df_within']);
+$anova2_result = false;
+if ($total_count > 10) {
+    $survey_data = get_all_survey_data();
+    // 年代・年収層のカテゴリを追加
+    foreach ($survey_data as $key => &$row) {
+        $age = $row['age'] ?? 0;
+        if ($age < 30) {
+            $row['age_group'] = '20代以下';
+        } elseif ($age < 40) {
+            $row['age_group'] = '30代';
+        } elseif ($age < 50) {
+            $row['age_group'] = '40代';
+        } elseif ($age < 60) {
+            $row['age_group'] = '50代';
+        } else {
+            $row['age_group'] = '60代以上';
+        }
+
+        $income = $row['income'] ?? 0;
+        if ($income < 400) {
+            $row['income_group'] = '400万円未満';
+        } elseif ($income < 800) {
+            $row['income_group'] = '400～800万円';
+        } else {
+            $row['income_group'] = '800万円以上';
+        }
+    }
+    unset($row); // 参照の解除
+
+    // 一元配置分散分析
+    $selected_group_key = $_POST['analysis_group'] ?? 'gender';
+    $anova_result = calculate_anova($survey_data, $selected_group_key, $selected_question_key);
+    if ($anova_result && $anova_result['significance_level'] > 0) {
+        $tukey_result = calculate_tukey_hsd($anova_result['groups'], $anova_result['ms_within'], $anova_result['df_within']);
+    }
+
+    // 二元配置分散分析
+    if ($total_count > 20) {
+        $factorA_key = $_POST['factor_a'] ?? 'age_group';
+        $factorB_key = $_POST['factor_b'] ?? 'gender';
+        if ($factorA_key === $factorB_key) {
+            $factorA_key = 'age_group';
+            $factorB_key = 'gender';
+        }
+        $anova2_result = calculate_two_way_anova($survey_data, $factorA_key, $factorB_key, $selected_question_key);
+    }
+} else {
+    $selected_group_key = $_POST['analysis_group'] ?? 'gender';
+    $factorA_key = $_POST['factor_a'] ?? 'age_group';
+    $factorB_key = $_POST['factor_b'] ?? 'gender';
 }
 
-// 二元配置用
-$factorA_key = $_POST['factor_a'] ?? 'age_group';
-$factorB_key = $_POST['factor_b'] ?? 'gender';
-if ($factorA_key === $factorB_key) {
-    $factorA_key = 'age_group';
-    $factorB_key = 'gender';
-}
-$anova2_result = ($total_count > 20) ? calculate_two_way_anova($survey_data, $factorA_key, $factorB_key, $selected_question_key) : false;
 
+// --- グラフデータ準備 ---
 // 一元配置グラフデータ
 $chart_labels = [];
 $chart_data = [];
@@ -607,12 +682,12 @@ if ($anova2_result) {
                                         </thead>
                                         <tbody>
                                             <tr class="bg-white border-b">
-                                                <td class="px-4 py-2 font-medium">主効果: <?php echo $group_text_map[$factorA_key]; ?></td>
+                                                <td class="px-4 py-2 font-medium">主効果: <?php echo htmlspecialchars($group_text_map[$factorA_key]); ?></td>
                                                 <td class="px-4 py-2"><?php echo round($anova2_result['factor_A']['f'], 2); ?></td>
                                                 <td class="px-4 py-2 font-bold <?php echo $anova2_result['factor_A']['sig'] ? 'text-red-500' : ''; ?>"><?php echo $anova2_result['factor_A']['sig'] == 0.01 ? 'p < .01 **' : ($anova2_result['factor_A']['sig'] == 0.05 ? 'p < .05 *' : '有意差なし'); ?></td>
                                             </tr>
                                             <tr class="bg-white border-b">
-                                                <td class="px-4 py-2 font-medium">主効果: <?php echo $group_text_map[$factorB_key]; ?></td>
+                                                <td class="px-4 py-2 font-medium">主効果: <?php echo htmlspecialchars($group_text_map[$factorB_key]); ?></td>
                                                 <td class="px-4 py-2"><?php echo round($anova2_result['factor_B']['f'], 2); ?></td>
                                                 <td class="px-4 py-2 font-bold <?php echo $anova2_result['factor_B']['sig'] ? 'text-red-500' : ''; ?>"><?php echo $anova2_result['factor_B']['sig'] == 0.01 ? 'p < .01 **' : ($anova2_result['factor_B']['sig'] == 0.05 ? 'p < .05 *' : '有意差なし'); ?></td>
                                             </tr>
@@ -642,19 +717,17 @@ if ($anova2_result) {
                     tabs.forEach(tab => {
                         tab.addEventListener('click', () => {
                             const target = document.querySelector(tab.dataset.tabTarget);
-                            tabContents.forEach(content => {
-                                content.classList.add('hidden');
-                            });
+                            tabContents.forEach(content => content.classList.add('hidden'));
                             if (target) target.classList.remove('hidden');
-                            tabs.forEach(t => {
-                                t.classList.remove('active');
-                            });
+                            tabs.forEach(t => t.classList.remove('active'));
                             tab.classList.add('active');
                         });
                     });
                 });
-                <?php if ($total_count >= 10): ?>
+                <?php if ($total_count > 0): ?>
                     const pieChartOptions = {
+                        responsive: true,
+                        maintainAspectRatio: false,
                         plugins: {
                             legend: {
                                 position: 'right',
@@ -665,46 +738,54 @@ if ($anova2_result) {
                         }
                     };
                     const pieColors = ['#60A5FA', '#F87171', '#4ADE80', '#FBBF24', '#A78BFA', '#F472B6'];
-                    new Chart(document.getElementById('genderChart'), {
-                        type: 'pie',
-                        data: {
-                            labels: <?php echo json_encode(array_keys($gender_dist_counts)); ?>,
-                            datasets: [{
-                                data: <?php echo json_encode(array_values($gender_dist_counts)); ?>,
-                                backgroundColor: pieColors
-                            }]
-                        },
-                        options: pieChartOptions
-                    });
-                    new Chart(document.getElementById('ageChart'), {
-                        type: 'pie',
-                        data: {
-                            labels: <?php echo json_encode(array_keys($age_dist_counts)); ?>,
-                            datasets: [{
-                                data: <?php echo json_encode(array_values($age_dist_counts)); ?>,
-                                backgroundColor: pieColors
-                            }]
-                        },
-                        options: pieChartOptions
-                    });
-                    new Chart(document.getElementById('incomeChart'), {
-                        type: 'pie',
-                        data: {
-                            labels: <?php echo json_encode(array_keys($income_dist_counts)); ?>,
-                            datasets: [{
-                                data: <?php echo json_encode(array_values($income_dist_counts)); ?>,
-                                backgroundColor: pieColors
-                            }]
-                        },
-                        options: pieChartOptions
-                    });
+
+                    if (document.getElementById('genderChart') && <?php echo json_encode(!empty($gender_dist_counts)); ?>) {
+                        new Chart(document.getElementById('genderChart'), {
+                            type: 'pie',
+                            data: {
+                                labels: <?php echo json_encode(array_keys($gender_dist_counts)); ?>,
+                                datasets: [{
+                                    data: <?php echo json_encode(array_values($gender_dist_counts)); ?>,
+                                    backgroundColor: pieColors
+                                }]
+                            },
+                            options: pieChartOptions
+                        });
+                    }
+                    if (document.getElementById('ageChart') && <?php echo json_encode(!empty($age_dist_counts)); ?>) {
+                        new Chart(document.getElementById('ageChart'), {
+                            type: 'pie',
+                            data: {
+                                labels: <?php echo json_encode(array_keys($age_dist_counts)); ?>,
+                                datasets: [{
+                                    data: <?php echo json_encode(array_values($age_dist_counts)); ?>,
+                                    backgroundColor: pieColors
+                                }]
+                            },
+                            options: pieChartOptions
+                        });
+                    }
+                    if (document.getElementById('incomeChart') && <?php echo json_encode(!empty($income_dist_counts)); ?>) {
+                        new Chart(document.getElementById('incomeChart'), {
+                            type: 'pie',
+                            data: {
+                                labels: <?php echo json_encode(array_keys($income_dist_counts)); ?>,
+                                datasets: [{
+                                    data: <?php echo json_encode(array_values($income_dist_counts)); ?>,
+                                    backgroundColor: pieColors
+                                }]
+                            },
+                            options: pieChartOptions
+                        });
+                    }
+
                     const radarDatasets = [{
                         label: '全体の平均評価点',
                         data: <?php echo json_encode($radar_avg_scores); ?>,
                         fill: true,
                         backgroundColor: 'rgba(59, 130, 246, 0.2)',
                         borderColor: 'rgb(59, 130, 246)',
-                        pointBackgroundColor: 'rgb(59, 130, 246)',
+                        pointBackgroundColor: 'rgb(59, 130, 246)'
                     }];
                     <?php if ($my_score_for_chart): ?>
                         radarDatasets.push({
@@ -716,82 +797,22 @@ if ($anova2_result) {
                             pointBackgroundColor: 'rgb(239, 68, 68)'
                         });
                     <?php endif; ?>
-                    new Chart(document.getElementById('radarChart'), {
-                        type: 'radar',
-                        data: {
-                            labels: <?php echo json_encode(array_values($questions_text)); ?>,
-                            datasets: radarDatasets
-                        },
-                        options: {
-                            scales: {
-                                r: {
-                                    beginAtZero: true,
-                                    max: 5,
-                                    pointLabels: {
-                                        font: {
-                                            size: window.innerWidth > 768 ? 12 : 9
-                                        }
-                                    }
-                                }
-                            },
-                            plugins: {
-                                legend: {
-                                    position: 'bottom'
-                                }
-                            }
-                        }
-                    });
-
-                    <?php if ($anova_result && !empty($chart_data)): ?>
-                        new Chart(document.getElementById('crossAnalysisChart'), {
-                            type: 'bar',
+                    if (document.getElementById('radarChart')) {
+                        new Chart(document.getElementById('radarChart'), {
+                            type: 'radar',
                             data: {
-                                labels: <?php echo json_encode($chart_labels); ?>,
-                                datasets: [{
-                                    label: '平均評価点',
-                                    data: <?php echo json_encode($chart_data); ?>,
-                                    backgroundColor: pieColors
-                                }]
-                            },
-                            options: {
-                                indexAxis: 'y',
-                                scales: {
-                                    x: {
-                                        beginAtZero: true,
-                                        max: 5
-                                    }
-                                },
-                                plugins: {
-                                    legend: {
-                                        display: false
-                                    }
-                                }
-                            }
-                        });
-                    <?php endif; ?>
-                    <?php if ($anova2_result): ?>
-                        const interactionPlotDatasets = <?php echo json_encode($interaction_plot_data); ?>.map((dataset, index) => {
-                            return {
-                                ...dataset,
-                                borderColor: pieColors[index % pieColors.length],
-                                backgroundColor: pieColors[index % pieColors.length],
-                                tension: 0.1
-                            }
-                        });
-                        new Chart(document.getElementById('interactionPlot'), {
-                            type: 'line',
-                            data: {
-                                labels: <?php echo json_encode($anova2_result['factorA_levels']); ?>,
-                                datasets: interactionPlotDatasets
+                                labels: <?php echo json_encode(array_values($questions_text)); ?>,
+                                datasets: radarDatasets
                             },
                             options: {
                                 scales: {
-                                    y: {
+                                    r: {
                                         beginAtZero: true,
                                         max: 5,
-                                        title: {
-                                            display: true,
-                                            text: '平均評価点'
+                                        pointLabels: {
+                                            font: {
+                                                size: window.innerWidth > 768 ? 12 : 9
+                                            }
                                         }
                                     }
                                 },
@@ -802,6 +823,71 @@ if ($anova2_result) {
                                 }
                             }
                         });
+                    }
+
+                    <?php if ($anova_result && !empty($chart_data)): ?>
+                        if (document.getElementById('crossAnalysisChart')) {
+                            new Chart(document.getElementById('crossAnalysisChart'), {
+                                type: 'bar',
+                                data: {
+                                    labels: <?php echo json_encode($chart_labels); ?>,
+                                    datasets: [{
+                                        label: '平均評価点',
+                                        data: <?php echo json_encode($chart_data); ?>,
+                                        backgroundColor: pieColors
+                                    }]
+                                },
+                                options: {
+                                    indexAxis: 'y',
+                                    scales: {
+                                        x: {
+                                            beginAtZero: true,
+                                            max: 5
+                                        }
+                                    },
+                                    plugins: {
+                                        legend: {
+                                            display: false
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    <?php endif; ?>
+
+                    <?php if ($anova2_result): ?>
+                        const interactionPlotDatasets = <?php echo json_encode($interaction_plot_data); ?>.map((dataset, index) => ({
+                            ...dataset,
+                            borderColor: pieColors[index % pieColors.length],
+                            backgroundColor: pieColors[index % pieColors.length],
+                            tension: 0.1
+                        }));
+                        if (document.getElementById('interactionPlot')) {
+                            new Chart(document.getElementById('interactionPlot'), {
+                                type: 'line',
+                                data: {
+                                    labels: <?php echo json_encode($anova2_result['factorA_levels']); ?>,
+                                    datasets: interactionPlotDatasets
+                                },
+                                options: {
+                                    scales: {
+                                        y: {
+                                            beginAtZero: true,
+                                            max: 5,
+                                            title: {
+                                                display: true,
+                                                text: '平均評価点'
+                                            }
+                                        }
+                                    },
+                                    plugins: {
+                                        legend: {
+                                            position: 'bottom'
+                                        }
+                                    }
+                                }
+                            });
+                        }
                     <?php endif; ?>
                 <?php endif; ?>
             </script>
