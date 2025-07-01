@@ -79,17 +79,36 @@ function get_radar_avg_scores()
 }
 
 /**
- * 詳細な分析（ANOVAなど）のために全データを取得する
+ * 詳細な分析のために全データを取得する
+ * SQLのCASE文でカテゴリ分けまで行い、PHPでの処理をシンプルにする
  * @return array
  */
 function get_all_survey_data()
 {
     $pdo = get_pdo_connection();
     try {
-        $stmt = $pdo->query("SELECT age, income, gender, disability, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10 FROM survey_db");
+        $sql = "
+            SELECT
+                age, income, gender, disability,
+                q1, q2, q3, q4, q5, q6, q7, q8, q9, q10,
+                CASE
+                    WHEN age < 30 THEN '20代以下'
+                    WHEN age BETWEEN 30 AND 39 THEN '30代'
+                    WHEN age BETWEEN 40 AND 49 THEN '40代'
+                    WHEN age BETWEEN 50 AND 59 THEN '50代'
+                    ELSE '60代以上'
+                END as age_group,
+                CASE
+                    WHEN income < 400 THEN '400万円未満'
+                    WHEN income BETWEEN 400 AND 799 THEN '400～800万円'
+                    ELSE '800万円以上'
+                END as income_group
+            FROM survey_db
+        ";
+        $stmt = $pdo->query($sql);
         $results = $stmt->fetchAll();
 
-        // analysis.phpの既存ロジックが期待する形式にデータを再構築する
+        // 分析関数が期待する'answers'キーを持つネスト構造に変換
         $survey_data = [];
         foreach ($results as $row) {
             $answers = [];
@@ -102,6 +121,8 @@ function get_all_survey_data()
                 'gender' => $row['gender'],
                 'income' => $row['income'],
                 'disability' => $row['disability'],
+                'age_group' => $row['age_group'],
+                'income_group' => $row['income_group'],
                 'answers' => $answers,
             ];
         }
@@ -113,7 +134,7 @@ function get_all_survey_data()
 
 
 // =================================================================
-//  統計処理関数 (このセクションは変更ありません)
+//  統計処理関数
 // =================================================================
 function get_f_critical_value($df1, $df2, $alpha = 0.05)
 {
@@ -137,7 +158,7 @@ function get_f_critical_value($df1, $df2, $alpha = 0.05)
     ];
 
     $table = ($alpha == 0.01) ? $f_table_01 : $f_table_05;
-    if (!isset($table[$df1])) return 999; // 自由度1が存在しない場合
+    if (!isset($table[$df1])) return 999;
     $df2_keys_numeric = array_filter(array_keys($table[$df1]), 'is_numeric');
     if (empty($df2_keys_numeric)) return 999;
     rsort($df2_keys_numeric);
@@ -257,6 +278,10 @@ function calculate_tukey_hsd($groups, $ms_within, $df_within)
     return $results;
 }
 
+/**
+ * 二元配置分散分析の計算（★修正箇所）
+ * @return array|string 結果の配列、またはエラーメッセージの文字列を返す
+ */
 function calculate_two_way_anova($data, $factorA_key, $factorB_key, $value_key)
 {
     $cells = [];
@@ -280,17 +305,26 @@ function calculate_two_way_anova($data, $factorA_key, $factorB_key, $value_key)
     $a_count = count($factorA_levels);
     $b_count = count($factorB_levels);
     $N = count($all_values);
-    if ($a_count < 2 || $b_count < 2) return false;
+    if ($a_count < 2 || $b_count < 2) return "要因の数が不足しているため、分析を実行できません。";
+
     $cell_stats = [];
     foreach ($factorA_levels as $a) {
         foreach ($factorB_levels as $b) {
             $n = isset($cells[$a][$b]) ? count($cells[$a][$b]) : 0;
-            if ($n < 2) return false; // 各セルに最低2つのデータが必要
+            // ★修正箇所: データ不足の組み合わせを特定してエラーメッセージを返す
+            if ($n < 2) {
+                global $group_text_map;
+                $factorA_name = $group_text_map[$factorA_key] ?? $factorA_key;
+                $factorB_name = $group_text_map[$factorB_key] ?? $factorB_key;
+                return "データ不足のため分析を中止しました。要因「{$factorA_name}」が「{$a}」で、かつ要因「{$factorB_name}」が「{$b}」の組み合わせのデータが{$n}件しかありません。分析には最低2件必要です。";
+            }
             $sum = isset($cells[$a][$b]) ? array_sum($cells[$a][$b]) : 0;
             $mean = $n > 0 ? $sum / $n : 0;
             $cell_stats[$a][$b] = ['n' => $n, 'sum' => $sum, 'mean' => $mean];
         }
     }
+
+    // これ以降の計算ロジックは変更なし
     $grand_mean = $N > 0 ? array_sum($all_values) / $N : 0;
     $correction_term = $N > 0 ? pow(array_sum($all_values), 2) / $N : 0;
     $SST = 0;
@@ -333,7 +367,7 @@ function calculate_two_way_anova($data, $factorA_key, $factorB_key, $value_key)
     $dfB = $b_count - 1;
     $dfAB = $dfA * $dfB;
     $dfE = $N - ($a_count * $b_count);
-    if ($dfA <= 0 || $dfB <= 0 || $dfE <= 0) return false;
+    if ($dfA <= 0 || $dfB <= 0 || $dfE <= 0) return "自由度が0以下になるため分析できません。データが不足しています。";
     $MSA = $SSA / $dfA;
     $MSB = $SSB / $dfB;
     $MSAB = $SSAB >= 0 && $dfAB > 0 ? $SSAB / $dfAB : 0;
@@ -370,7 +404,6 @@ function calculate_two_way_anova($data, $factorA_key, $factorB_key, $value_key)
 // =================================================================
 
 $total_count = get_total_count();
-$survey_data = []; // 詳細分析用のデータは後で読み込む
 $demographics = [];
 $gender_dist_counts = [];
 $age_dist_counts = [];
@@ -385,7 +418,6 @@ if ($total_count > 0) {
     $radar_avg_scores = get_radar_avg_scores();
 }
 
-// 質問項目とグループの定義
 $questions_text = [
     'q1' => 'ドキュメンタリー動画への興味',
     'q2' => 'VR仮想旅行への興味',
@@ -400,7 +432,6 @@ $questions_text = [
 ];
 $group_text_map = ['gender' => '性別', 'age_group' => '年代', 'income_group' => '年収層', 'disability' => '障害有無'];
 
-// 自分のスコアをレーダーチャート用に整形
 $my_score_for_chart = null;
 if ($my_score_data) {
     $my_score_for_chart = [];
@@ -409,67 +440,40 @@ if ($my_score_data) {
     }
 }
 
-// --- 分析パラメータの受け取りと実行 ---
 $selected_question_key = $_POST['analysis_question'] ?? 'q2';
+$selected_group_key = $_POST['analysis_group'] ?? 'gender';
+$factorA_key = $_POST['factor_a'] ?? 'age_group';
+$factorB_key = $_POST['factor_b'] ?? 'gender';
 
-// 詳細な分析が必要な場合のみ、全データを読み込んで処理
+$survey_data = [];
 $anova_result = false;
 $tukey_result = null;
 $anova2_result = false;
+$anova2_error_message = null; // ★追加: エラーメッセージ用変数
+
 if ($total_count > 10) {
     $survey_data = get_all_survey_data();
-    // 年代・年収層のカテゴリを追加
-    foreach ($survey_data as $key => &$row) {
-        $age = $row['age'] ?? 0;
-        if ($age < 30) {
-            $row['age_group'] = '20代以下';
-        } elseif ($age < 40) {
-            $row['age_group'] = '30代';
-        } elseif ($age < 50) {
-            $row['age_group'] = '40代';
-        } elseif ($age < 60) {
-            $row['age_group'] = '50代';
-        } else {
-            $row['age_group'] = '60代以上';
-        }
-
-        $income = $row['income'] ?? 0;
-        if ($income < 400) {
-            $row['income_group'] = '400万円未満';
-        } elseif ($income < 800) {
-            $row['income_group'] = '400～800万円';
-        } else {
-            $row['income_group'] = '800万円以上';
-        }
-    }
-    unset($row); // 参照の解除
-
-    // 一元配置分散分析
-    $selected_group_key = $_POST['analysis_group'] ?? 'gender';
     $anova_result = calculate_anova($survey_data, $selected_group_key, $selected_question_key);
     if ($anova_result && $anova_result['significance_level'] > 0) {
         $tukey_result = calculate_tukey_hsd($anova_result['groups'], $anova_result['ms_within'], $anova_result['df_within']);
     }
 
-    // 二元配置分散分析
     if ($total_count > 20) {
-        $factorA_key = $_POST['factor_a'] ?? 'age_group';
-        $factorB_key = $_POST['factor_b'] ?? 'gender';
         if ($factorA_key === $factorB_key) {
             $factorA_key = 'age_group';
             $factorB_key = 'gender';
         }
-        $anova2_result = calculate_two_way_anova($survey_data, $factorA_key, $factorB_key, $selected_question_key);
+        // ★修正箇所: 結果が配列か文字列(エラー)かで処理を分ける
+        $anova2_raw_result = calculate_two_way_anova($survey_data, $factorA_key, $factorB_key, $selected_question_key);
+        if (is_array($anova2_raw_result)) {
+            $anova2_result = $anova2_raw_result;
+        } elseif (is_string($anova2_raw_result)) {
+            $anova2_error_message = $anova2_raw_result;
+        }
     }
-} else {
-    $selected_group_key = $_POST['analysis_group'] ?? 'gender';
-    $factorA_key = $_POST['factor_a'] ?? 'age_group';
-    $factorB_key = $_POST['factor_b'] ?? 'gender';
 }
 
-
 // --- グラフデータ準備 ---
-// 一元配置グラフデータ
 $chart_labels = [];
 $chart_data = [];
 if ($anova_result) {
@@ -478,9 +482,7 @@ if ($anova_result) {
         $group_name = $row[$selected_group_key] ?? 'N/A';
         $value = $row['answers'][$selected_question_key] ?? null;
         if ($value === null) continue;
-        if (!isset($groups_for_chart[$group_name])) {
-            $groups_for_chart[$group_name] = ['sum' => 0, 'count' => 0];
-        }
+        if (!isset($groups_for_chart[$group_name])) $groups_for_chart[$group_name] = ['sum' => 0, 'count' => 0];
         $groups_for_chart[$group_name]['sum'] += $value;
         $groups_for_chart[$group_name]['count']++;
     }
@@ -490,7 +492,6 @@ if ($anova_result) {
         $chart_data[] = $values['count'] > 0 ? $values['sum'] / $values['count'] : 0;
     }
 }
-// 二元配置グラフデータ
 $interaction_plot_data = [];
 if ($anova2_result) {
     foreach ($anova2_result['factorB_levels'] as $b_level) {
@@ -543,13 +544,16 @@ if ($anova2_result) {
                 <h2 class="text-2xl font-bold mb-4 text-gray-700 border-b-2 pb-2">全体集計データ</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
                     <div class="bg-white p-4 rounded-xl shadow-lg">
-                        <h3 class="font-semibold text-center mb-2">性別</h3><canvas id="genderChart"></canvas>
+                        <h3 class="font-semibold text-center mb-2">性別</h3>
+                        <div class="relative h-72"><canvas id="genderChart"></canvas></div>
                     </div>
                     <div class="bg-white p-4 rounded-xl shadow-lg">
-                        <h3 class="font-semibold text-center mb-2">年代</h3><canvas id="ageChart"></canvas>
+                        <h3 class="font-semibold text-center mb-2">年代</h3>
+                        <div class="relative h-72"><canvas id="ageChart"></canvas></div>
                     </div>
                     <div class="bg-white p-4 rounded-xl shadow-lg">
-                        <h3 class="font-semibold text-center mb-2">年収層</h3><canvas id="incomeChart"></canvas>
+                        <h3 class="font-semibold text-center mb-2">年収層</h3>
+                        <div class="relative h-72"><canvas id="incomeChart"></canvas></div>
                     </div>
                 </div>
                 <div class="bg-white p-6 rounded-xl shadow-lg">
@@ -581,7 +585,8 @@ if ($anova2_result) {
                         </div>
                         <div>
                             <h3 class="font-semibold mb-2">分散分析 (ANOVA) 結果</h3>
-                            <?php if ($anova_result): ?><div class="overflow-x-auto">
+                            <?php if ($anova_result): ?>
+                                <div class="overflow-x-auto">
                                     <table class="w-full text-sm text-left text-gray-500">
                                         <thead class="text-xs text-gray-700 uppercase bg-gray-100">
                                             <tr>
@@ -663,6 +668,7 @@ if ($anova2_result) {
                         <div class="flex-grow"><label for="analysis_question_adv" class="text-sm font-medium text-gray-700">分析対象の質問:</label><select name="analysis_question" id="analysis_question_adv" class="w-full mt-1 p-2 border border-gray-300 rounded-md"><?php foreach ($questions_text as $key => $text): ?><option value="<?php echo $key; ?>" <?php if ($selected_question_key == $key) echo 'selected'; ?>><?php echo htmlspecialchars($text); ?></option><?php endforeach; ?></select></div>
                         <button type="submit" class="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-md self-end">再分析</button>
                     </form>
+
                     <?php if ($anova2_result): ?>
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                             <div>
@@ -702,10 +708,16 @@ if ($anova2_result) {
                                     </div>
                                 </div>
                             </div>
-                        <?php else: ?><div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-6 rounded-lg shadow-md text-center">
+                        <?php else: ?>
+                            <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-6 rounded-lg shadow-md text-center">
                                 <p class="font-bold">二元配置分散分析を実行できません。</p>
-                                <p class="mt-2 text-sm">各グループの組み合わせ（例: 20代かつ男性）に、最低2件以上のデータが必要です。データ数を増やすか、別の組み合わせをお試しください。</p>
-                            </div><?php endif; ?>
+                                <?php if ($anova2_error_message): ?>
+                                    <p class="mt-2 text-sm text-red-600 font-semibold"><?php echo htmlspecialchars($anova2_error_message); ?></p>
+                                <?php else: ?>
+                                    <p class="mt-2 text-sm">各グループの組み合わせに、最低2件以上のデータが必要です。データ数を増やすか、別の組み合わせをお試しください。</p>
+                                <?php endif; ?>
+                            </div>
+                        <?php endif; ?>
                         </div>
                 </div>
             <?php endif; ?>
@@ -738,7 +750,6 @@ if ($anova2_result) {
                         }
                     };
                     const pieColors = ['#60A5FA', '#F87171', '#4ADE80', '#FBBF24', '#A78BFA', '#F472B6'];
-
                     if (document.getElementById('genderChart') && <?php echo json_encode(!empty($gender_dist_counts)); ?>) {
                         new Chart(document.getElementById('genderChart'), {
                             type: 'pie',
@@ -778,7 +789,6 @@ if ($anova2_result) {
                             options: pieChartOptions
                         });
                     }
-
                     const radarDatasets = [{
                         label: '全体の平均評価点',
                         data: <?php echo json_encode($radar_avg_scores); ?>,
@@ -824,7 +834,6 @@ if ($anova2_result) {
                             }
                         });
                     }
-
                     <?php if ($anova_result && !empty($chart_data)): ?>
                         if (document.getElementById('crossAnalysisChart')) {
                             new Chart(document.getElementById('crossAnalysisChart'), {
@@ -854,7 +863,6 @@ if ($anova2_result) {
                             });
                         }
                     <?php endif; ?>
-
                     <?php if ($anova2_result): ?>
                         const interactionPlotDatasets = <?php echo json_encode($interaction_plot_data); ?>.map((dataset, index) => ({
                             ...dataset,
