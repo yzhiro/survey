@@ -1,11 +1,18 @@
 <?php
 session_start();
+
+// ログイン状態のチェック
+if (!isset($_SESSION['user'])) {
+    // ログインしていない場合はログインページにリダイレクト
+    $_SESSION['error'] = 'レポートを閲覧するにはログインが必要です。';
+    header('Location: login.php');
+    exit();
+}
+
 // データベース接続ファイルを読み込む
 require_once 'db_connect.php';
 
 // --- セッションデータ処理 ---
-$flash_message = $_SESSION['message'] ?? null;
-$my_score_data = $_SESSION['my_score'] ?? null;
 unset($_SESSION['message'], $_SESSION['my_score']);
 
 // --- タブ表示制御 ---
@@ -432,14 +439,6 @@ $questions_text = [
 ];
 $group_text_map = ['gender' => '性別', 'age_group' => '年代', 'income_group' => '年収層', 'disability' => '障害有無'];
 
-$my_score_for_chart = null;
-if ($my_score_data) {
-    $my_score_for_chart = [];
-    foreach (array_keys($questions_text) as $q_key) {
-        $my_score_for_chart[] = $my_score_data['answers'][$q_key] ?? 0;
-    }
-}
-
 $selected_question_key = $_POST['analysis_question'] ?? 'q2';
 $selected_group_key = $_POST['analysis_group'] ?? 'gender';
 $factorA_key = $_POST['factor_a'] ?? 'age_group';
@@ -527,11 +526,12 @@ if ($anova2_result) {
 
 <body class="bg-gray-100 text-gray-800">
     <div class="container mx-auto p-4 md:p-8">
+        <div class="text-right mb-4">
+            <span class="text-sm text-gray-600 mr-3">ようこそ, <?php echo htmlspecialchars($_SESSION['user']); ?>さん</span>
+            <a href="logout.php" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg text-sm">ログアウト</a>
+        </div>
         <h1 class="text-center text-3xl md:text-4xl font-bold text-gray-800 mb-2">分析レポート</h1>
         <p class="text-center text-gray-600 mb-6">世界遺産コンテンツに関するアンケート結果 (総回答者数: <?php echo $total_count; ?>名)</p>
-        <?php if ($flash_message): ?><div class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 rounded-lg shadow-md mb-8" role="alert">
-                <p class="font-bold"><?php echo htmlspecialchars($flash_message); ?></p>
-            </div><?php endif; ?>
 
         <?php if ($total_count < 20): ?>
             <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-6 rounded-lg shadow-md text-center">
@@ -557,7 +557,7 @@ if ($anova2_result) {
                     </div>
                 </div>
                 <div class="bg-white p-6 rounded-xl shadow-lg">
-                    <h3 class="font-semibold text-center mb-2">各質問のスコア比較 <?php if ($my_score_data): ?><span class="text-sm font-normal">(<span class="text-blue-600">青: 全体平均</span>, <span class="text-red-600">赤: あなたの回答</span>)</span><?php else: ?><span class="text-sm font-normal">(全体の平均評価点)</span><?php endif; ?></h3>
+                    <h3 class="font-semibold text-center mb-2">各質問のスコア比較 <span class="text-sm font-normal">(全体の平均評価点)</span></h3>
                     <canvas id="radarChart"></canvas>
                 </div>
             </div>
@@ -797,16 +797,6 @@ if ($anova2_result) {
                         borderColor: 'rgb(59, 130, 246)',
                         pointBackgroundColor: 'rgb(59, 130, 246)'
                     }];
-                    <?php if ($my_score_for_chart): ?>
-                        radarDatasets.push({
-                            label: 'あなたのスコア',
-                            data: <?php echo json_encode($my_score_for_chart); ?>,
-                            fill: true,
-                            backgroundColor: 'rgba(239, 68, 68, 0.2)',
-                            borderColor: 'rgb(239, 68, 68)',
-                            pointBackgroundColor: 'rgb(239, 68, 68)'
-                        });
-                    <?php endif; ?>
                     if (document.getElementById('radarChart')) {
                         new Chart(document.getElementById('radarChart'), {
                             type: 'radar',

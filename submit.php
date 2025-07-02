@@ -61,11 +61,14 @@ try {
     exit('データベースへの書き込みに失敗しました: ' . $e->getMessage());
 }
 
-// セッションにメッセージと今回の回答を保存
-$_SESSION['message'] = 'ご回答ありがとうございました！あなたの回答と全体の傾向を比較します。';
-$_SESSION['my_score'] = $submission_data;
+// // セッションにメッセージと今回の回答を保存
+// $_SESSION['message'] = 'ご回答ありがとうございました！あなたの回答と全体の傾向を比較します。';
+// $_SESSION['my_score'] = $submission_data;
 
-// analysis.phpにリダイレクト
-header('Location: analysis.php');
+// // analysis.phpにリダイレクト
+// header('Location: analysis.php');
+// exit();
+// 
+header('Location: thanks.php');
 exit();
 ?>

@@ -10,6 +10,14 @@
 
 <body class="bg-gray-100 text-gray-800">
 
+    <header class="bg-white shadow-sm">
+        <div class="container mx-auto p-4 flex justify-end items-center">
+            <a href="login.php" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg text-sm">
+                管理者用
+            </a>
+        </div>
+    </header>
+
     <div class="container mx-auto p-4 md:p-8">
         <div class="bg-white rounded-2xl shadow-xl p-6 md:p-10">
 
