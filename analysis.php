@@ -286,7 +286,7 @@ function calculate_tukey_hsd($groups, $ms_within, $df_within)
 }
 
 /**
- * 二元配置分散分析の計算（★修正箇所）
+ * 二元配置分散分析の計算
  * @return array|string 結果の配列、またはエラーメッセージの文字列を返す
  */
 function calculate_two_way_anova($data, $factorA_key, $factorB_key, $value_key)
@@ -318,7 +318,6 @@ function calculate_two_way_anova($data, $factorA_key, $factorB_key, $value_key)
     foreach ($factorA_levels as $a) {
         foreach ($factorB_levels as $b) {
             $n = isset($cells[$a][$b]) ? count($cells[$a][$b]) : 0;
-            // ★修正箇所: データ不足の組み合わせを特定してエラーメッセージを返す
             if ($n < 2) {
                 global $group_text_map;
                 $factorA_name = $group_text_map[$factorA_key] ?? $factorA_key;
@@ -331,7 +330,6 @@ function calculate_two_way_anova($data, $factorA_key, $factorB_key, $value_key)
         }
     }
 
-    // これ以降の計算ロジックは変更なし
     $grand_mean = $N > 0 ? array_sum($all_values) / $N : 0;
     $correction_term = $N > 0 ? pow(array_sum($all_values), 2) / $N : 0;
     $SST = 0;
@@ -448,7 +446,7 @@ $survey_data = [];
 $anova_result = false;
 $tukey_result = null;
 $anova2_result = false;
-$anova2_error_message = null; // ★追加: エラーメッセージ用変数
+$anova2_error_message = null;
 
 if ($total_count > 10) {
     $survey_data = get_all_survey_data();
@@ -462,7 +460,6 @@ if ($total_count > 10) {
             $factorA_key = 'age_group';
             $factorB_key = 'gender';
         }
-        // ★修正箇所: 結果が配列か文字列(エラー)かで処理を分ける
         $anova2_raw_result = calculate_two_way_anova($survey_data, $factorA_key, $factorB_key, $selected_question_key);
         if (is_array($anova2_raw_result)) {
             $anova2_result = $anova2_raw_result;
@@ -528,7 +525,8 @@ if ($anova2_result) {
     <div class="container mx-auto p-4 md:p-8">
         <div class="text-right mb-4">
             <span class="text-sm text-gray-600 mr-3">ようこそ, <?php echo htmlspecialchars($_SESSION['user']); ?>さん</span>
-            <a href="logout.php" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg text-sm">ログアウト</a>
+            <a href="view_data.php" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg text-sm">DB表示</a>
+            <a href="logout.php" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg text-sm ml-2">ログアウト</a>
         </div>
         <h1 class="text-center text-3xl md:text-4xl font-bold text-gray-800 mb-2">分析レポート</h1>
         <p class="text-center text-gray-600 mb-6">世界遺産コンテンツに関するアンケート結果 (総回答者数: <?php echo $total_count; ?>名)</p>
