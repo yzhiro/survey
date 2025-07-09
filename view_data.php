@@ -21,14 +21,7 @@ try {
 
 // 質問項目とカラム名の対応
 $questions_map = [
-    'id' => 'ID',
-    'age' => '年齢',
-    'gender' => '性別',
-    'income' => '年収(万)',
-    'disability' => '障害有無',
-    'q1' => 'Q1', 'q2' => 'Q2', 'q3' => 'Q3', 'q4' => 'Q4', 'q5' => 'Q5',
-    'q6' => 'Q6', 'q7' => 'Q7', 'q8' => 'Q8', 'q9' => 'Q9', 'q10' => 'Q10',
-    'submitted_at' => '回答日時'
+    'id' => 'ID', 'age' => '年齢', 'gender' => '性別', 'income' => '年収(万)', 'disability' => '障害有無', 'q1' => 'Q1', 'q2' => 'Q2', 'q3' => 'Q3', 'q4' => 'Q4', 'q5' => 'Q5', 'q6' => 'Q6', 'q7' => 'Q7', 'q8' => 'Q8', 'q9' => 'Q9', 'q10' => 'Q10', 'submitted_at' => '回答日時'
 ];
 ?>
 <!DOCTYPE html>
@@ -45,7 +38,7 @@ $questions_map = [
             <h1 class="text-3xl font-bold text-gray-800">データベース内容表示</h1>
             <div>
                 <a href="analysis.php" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">分析レポートに戻る</a>
-                <a href="logout.php" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg text-sm ml-2">ログアウト</a>
+                <a href="logout.php" class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg text-sm ml-2">ログアウト</a>
             </div>
         </div>
 
@@ -61,19 +54,24 @@ $questions_map = [
                 <table class="w-full text-sm text-left">
                     <thead class="bg-gray-100 text-xs text-gray-700 uppercase">
                         <tr>
-                            <?php foreach ($questions_map as $label): ?>
+                            <?php foreach (array_values($questions_map) as $label): ?>
                                 <th class="px-4 py-3 whitespace-nowrap"><?php echo $label; ?></th>
                             <?php endforeach; ?>
+                            <th class="px-4 py-3 whitespace-nowrap">操作</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($all_data as $row): ?>
                         <tr class="bg-white border-b hover:bg-gray-50">
-                            <?php foreach ($questions_map as $key => $label): ?>
+                            <?php foreach (array_keys($questions_map) as $key): ?>
                             <td class="px-4 py-3 whitespace-nowrap">
                                 <?php echo htmlspecialchars($row[$key]); ?>
                             </td>
                             <?php endforeach; ?>
+                            <td class="px-4 py-3 whitespace-nowrap">
+                                <a href="edit_form.php?id=<?php echo $row['id']; ?>" class="bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 rounded text-xs">編集</a>
+                                <a href="delete_data.php?id=<?php echo $row['id']; ?>" onclick="return confirm('本当にこのデータを削除しますか？(ID: <?php echo $row['id']; ?>)');" class="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded text-xs ml-1">削除</a>
+                            </td>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>

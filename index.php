@@ -111,7 +111,7 @@
 
                 <div class="mt-10 text-center">
                     <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition-transform transform hover:scale-105 shadow-lg">
-                        結果を分析する
+                        送　信
                     </button>
                 </div>
             </form>
