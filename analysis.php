@@ -1,8 +1,8 @@
 <?php
 session_start();
 
-// ログイン状態のチェック
-if (!isset($_SESSION['user'])) {
+// ログイン状態のチェック (いずれかの権限でログインしていればOK)
+if (!isset($_SESSION['role'])) {
     // ログインしていない場合はログインページにリダイレクト
     $_SESSION['error'] = 'レポートを閲覧するにはログインが必要です。';
     header('Location: login.php');
@@ -524,9 +524,14 @@ if ($anova2_result) {
 <body class="bg-gray-100 text-gray-800">
     <div class="container mx-auto p-4 md:p-8">
         <div class="text-right mb-4">
-            <span class="text-sm text-gray-600 mr-3">ようこそ, <?php echo htmlspecialchars($_SESSION['user']); ?>さん</span>
-            <a href="view_data.php" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg text-sm">DB表示</a>
-            <a href="logout.php" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg text-sm ml-2">ログアウト</a>
+            <span class="text-sm text-gray-600 mr-3">ようこそ, <?php echo htmlspecialchars($_SESSION['user']); ?> さん (権限: <?php echo htmlspecialchars($_SESSION['role']); ?>)</span>
+            <?php if ($_SESSION['role'] === 'admin' || $_SESSION['role'] === 'editor'): ?>
+                <a href="view_data.php" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg text-sm">DB表示</a>
+            <?php endif; ?>
+            <?php if ($_SESSION['role'] === 'admin'): ?>
+                <a href="manage_users.php" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg text-sm ml-2">ユーザー管理</a>
+            <?php endif; ?>
+            <a href="logout.php" class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg text-sm ml-2">ログアウト</a>
         </div>
         <h1 class="text-center text-3xl md:text-4xl font-bold text-gray-800 mb-2">分析レポート</h1>
         <p class="text-center text-gray-600 mb-6">世界遺産コンテンツに関するアンケート結果 (総回答者数: <?php echo $total_count; ?>名)</p>

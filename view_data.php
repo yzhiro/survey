@@ -1,9 +1,10 @@
 <?php
 session_start();
 
-// 管理者としてログインしているかチェック
-if (!isset($_SESSION['user'])) {
-    header('Location: login.php');
+// 管理者(admin)または中間管理者(editor)としてログインしているかチェック
+if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['admin', 'editor'])) {
+    $_SESSION['error'] = 'このページにアクセスする権限がありません。';
+    header('Location: analysis.php'); // 権限がない場合は分析ページへ戻す
     exit();
 }
 

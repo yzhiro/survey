@@ -1,9 +1,9 @@
 <?php
 session_start();
 
-// 管理者としてログインしているかチェック
-if (!isset($_SESSION['user'])) {
-    header('Location: login.php');
+// 管理者または中間管理者でなければアクセス不可
+if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['admin', 'editor'])) {
+    header('Location: analysis.php'); // or login.php
     exit();
 }
 
