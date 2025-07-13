@@ -523,22 +523,28 @@ if ($anova2_result) {
 
 <body class="bg-gray-100 text-gray-800">
     <div class="container mx-auto p-4 md:p-8">
-        <div class="text-right mb-4">
-            <span class="text-sm text-gray-600 mr-3">ようこそ, <?php echo htmlspecialchars($_SESSION['user']); ?> さん (権限: <?php echo htmlspecialchars($_SESSION['role']); ?>)</span>
-            
-            <a href="change_password.php" class="text-sm text-blue-600 hover:underline mr-4">パスワード変更</a>
+        <header class="flex justify-between items-center mb-6">
+            <h1 class="text-3xl font-bold text-gray-800">分析レポート</h1>
+            <div class="text-right">
+                <span class="text-sm text-gray-600 mr-4">ようこそ, <?php echo htmlspecialchars($_SESSION['user']); ?> さん (権限: <?php echo htmlspecialchars($_SESSION['role']); ?>)</span>
+                <a href="change_password.php" class="text-sm text-blue-600 hover:underline mr-4">パスワード変更</a>
+                <a href="logout.php" class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg text-sm">ログアウト</a>
+            </div>
+        </header>
 
+        <nav class="bg-white p-4 rounded-lg shadow-md mb-8 flex justify-start items-center gap-4">
+            <span class="font-bold">メニュー:</span>
             <?php if ($_SESSION['role'] === 'admin' || $_SESSION['role'] === 'editor'): ?>
-                <a href="view_data.php" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg text-sm">DB表示</a>
+                <a href="view_data.php" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg text-sm">DB表示・操作</a>
             <?php endif; ?>
             <?php if ($_SESSION['role'] === 'admin'): ?>
-                <a href="manage_users.php" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg text-sm ml-2">ユーザー管理</a>
+                <a href="manage_users.php" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg text-sm">ユーザー管理</a>
             <?php endif; ?>
-            <a href="logout.php" class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg text-sm ml-2">ログアウト</a>
-        </div>
-        <h1 class="text-center text-3xl md:text-4xl font-bold text-gray-800 mb-2">分析レポート</h1>
+            <a href="index.php" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">アンケートトップ</a>
+        </nav>
+
         <p class="text-center text-gray-600 mb-6">世界遺産コンテンツに関するアンケート結果 (総回答者数: <?php echo $total_count; ?>名)</p>
-        
+
         <?php if ($_SESSION['role'] === 'viewer'): ?>
             <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-6 rounded-lg shadow-md text-center">
                 <p class="font-bold text-lg">詳細な分析機能の閲覧権限がありません。</p>
@@ -576,334 +582,334 @@ if ($anova2_result) {
             </div>
 
             <?php if ($_SESSION['role'] === 'admin' || $_SESSION['role'] === 'editor'): ?>
-            <div id="analysis" class="mt-12">
-                <div class="flex border-b border-gray-300">
-                    <button data-tab-target="#simple-analysis" class="tab-button px-6 py-3 text-lg <?php echo $active_tab == 'simple' ? 'active' : 'text-gray-500 hover:bg-gray-200'; ?>">かんたん分析 (一元配置)</button>
-                    <button data-tab-target="#advanced-analysis" class="tab-button px-6 py-3 text-lg <?php echo $active_tab == 'advanced' ? 'active' : 'text-gray-500 hover:bg-gray-200'; ?>">詳細分析 (二元配置)</button>
+                <div id="analysis" class="mt-12">
+                    <div class="flex border-b border-gray-300">
+                        <button data-tab-target="#simple-analysis" class="tab-button px-6 py-3 text-lg <?php echo $active_tab == 'simple' ? 'active' : 'text-gray-500 hover:bg-gray-200'; ?>">かんたん分析 (一元配置)</button>
+                        <button data-tab-target="#advanced-analysis" class="tab-button px-6 py-3 text-lg <?php echo $active_tab == 'advanced' ? 'active' : 'text-gray-500 hover:bg-gray-200'; ?>">詳細分析 (二元配置)</button>
+                    </div>
                 </div>
-            </div>
 
-            <div id="simple-analysis" class="tab-content <?php echo $active_tab == 'simple' ? '' : 'hidden'; ?>">
-                <div class="bg-white p-6 rounded-b-xl shadow-lg">
-                    <h2 class="text-xl font-bold mb-4 text-gray-700">クロス集計と分散分析 (一元配置)</h2>
-                    <form method="POST" action="analysis.php#analysis" class="bg-gray-50 p-4 rounded-lg flex flex-wrap items-center gap-4 mb-6">
-                        <input type="hidden" name="submit_simple" value="1">
-                        <div class="flex-grow"><label for="analysis_group" class="text-sm font-medium text-gray-700">分析の軸:</label><select name="analysis_group" id="analysis_group" class="w-full mt-1 p-2 border border-gray-300 rounded-md"><?php foreach ($group_text_map as $key => $text): ?><option value="<?php echo $key; ?>" <?php if ($selected_group_key == $key) echo 'selected'; ?>><?php echo $text; ?></option><?php endforeach; ?></select></div>
-                        <div class="flex-grow"><label for="analysis_question_simple" class="text-sm font-medium text-gray-700">分析対象の質問:</label><select name="analysis_question" id="analysis_question_simple" class="w-full mt-1 p-2 border border-gray-300 rounded-md"><?php foreach ($questions_text as $key => $text): ?><option value="<?php echo $key; ?>" <?php if ($selected_question_key == $key) echo 'selected'; ?>><?php echo htmlspecialchars($text); ?></option><?php endforeach; ?></select></div>
-                        <button type="submit" class="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-md self-end">再分析</button>
-                    </form>
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div>
-                            <h3 class="font-semibold text-center mb-2"><?php echo htmlspecialchars($group_text_map[$selected_group_key] ?? ''); ?>別の「<?php echo htmlspecialchars($questions_text[$selected_question_key] ?? ''); ?>」平均評価<?php if ($anova_result && $anova_result['significance_level'] > 0): ?><span class="text-red-500 font-bold text-lg"><?php echo ($anova_result['significance_level'] == 0.01) ? '**' : '*'; ?></span><?php endif; ?></h3>
-                            <canvas id="crossAnalysisChart" class="p-4"></canvas>
-                        </div>
-                        <div>
-                            <h3 class="font-semibold mb-2">分散分析 (ANOVA) 結果</h3>
-                            <?php if ($anova_result): ?>
-                                <div class="overflow-x-auto">
-                                    <table class="w-full text-sm text-left text-gray-500">
-                                        <thead class="text-xs text-gray-700 uppercase bg-gray-100">
-                                            <tr>
-                                                <th class="px-4 py-2">要因</th>
-                                                <th class="px-4 py-2">平方和</th>
-                                                <th class="px-4 py-2">自由度</th>
-                                                <th class="px-4 py-2">平均平方</th>
-                                                <th class="px-4 py-2">F値</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <tr class="bg-white border-b">
-                                                <td class="px-4 py-2 font-medium">群間</td>
-                                                <td><?php echo round($anova_result['ss_between'], 2); ?></td>
-                                                <td><?php echo $anova_result['df_between']; ?></td>
-                                                <td><?php echo round($anova_result['ms_between'], 2); ?></td>
-                                                <td rowspan="2" class="align-middle font-bold text-lg text-center"><?php echo round($anova_result['f_value'], 2); ?></td>
-                                            </tr>
-                                            <tr class="bg-white border-b">
-                                                <td class="px-4 py-2 font-medium">群内</td>
-                                                <td><?php echo round($anova_result['ss_within'], 2); ?></td>
-                                                <td><?php echo $anova_result['df_within']; ?></td>
-                                                <td><?php echo round($anova_result['ms_within'], 2); ?></td>
-                                            </tr>
-                                            <tr class="bg-gray-50">
-                                                <td class="px-4 py-2 font-bold">合計</td>
-                                                <td><?php echo round($anova_result['ss_between'] + $anova_result['ss_within'], 2); ?></td>
-                                                <td><?php echo $anova_result['df_between'] + $anova_result['df_within']; ?></td>
-                                                <td></td>
-                                                <td></td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                                <?php if ($anova_result['significance_level'] == 0.01): ?><div class="mt-4 bg-green-100 border-l-4 border-green-600 text-green-900 p-4 rounded-lg shadow">
-                                        <p class="font-bold text-lg">結論: 有意差あり (p < 0.01) **</p>
-                                                <p class="mt-1">F値(<?php echo round($anova_result['f_value'], 2); ?>)は1%水準の臨界値(<?php echo round($anova_result['critical_value_01'], 2); ?>)を上回り、**極めて強い統計的な有意差**が認められます。</p>
+                <div id="simple-analysis" class="tab-content <?php echo $active_tab == 'simple' ? '' : 'hidden'; ?>">
+                    <div class="bg-white p-6 rounded-b-xl shadow-lg">
+                        <h2 class="text-xl font-bold mb-4 text-gray-700">クロス集計と分散分析 (一元配置)</h2>
+                        <form method="POST" action="analysis.php#analysis" class="bg-gray-50 p-4 rounded-lg flex flex-wrap items-center gap-4 mb-6">
+                            <input type="hidden" name="submit_simple" value="1">
+                            <div class="flex-grow"><label for="analysis_group" class="text-sm font-medium text-gray-700">分析の軸:</label><select name="analysis_group" id="analysis_group" class="w-full mt-1 p-2 border border-gray-300 rounded-md"><?php foreach ($group_text_map as $key => $text): ?><option value="<?php echo $key; ?>" <?php if ($selected_group_key == $key) echo 'selected'; ?>><?php echo $text; ?></option><?php endforeach; ?></select></div>
+                            <div class="flex-grow"><label for="analysis_question_simple" class="text-sm font-medium text-gray-700">分析対象の質問:</label><select name="analysis_question" id="analysis_question_simple" class="w-full mt-1 p-2 border border-gray-300 rounded-md"><?php foreach ($questions_text as $key => $text): ?><option value="<?php echo $key; ?>" <?php if ($selected_question_key == $key) echo 'selected'; ?>><?php echo htmlspecialchars($text); ?></option><?php endforeach; ?></select></div>
+                            <button type="submit" class="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-md self-end">再分析</button>
+                        </form>
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div>
+                                <h3 class="font-semibold text-center mb-2"><?php echo htmlspecialchars($group_text_map[$selected_group_key] ?? ''); ?>別の「<?php echo htmlspecialchars($questions_text[$selected_question_key] ?? ''); ?>」平均評価<?php if ($anova_result && $anova_result['significance_level'] > 0): ?><span class="text-red-500 font-bold text-lg"><?php echo ($anova_result['significance_level'] == 0.01) ? '**' : '*'; ?></span><?php endif; ?></h3>
+                                <canvas id="crossAnalysisChart" class="p-4"></canvas>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold mb-2">分散分析 (ANOVA) 結果</h3>
+                                <?php if ($anova_result): ?>
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-sm text-left text-gray-500">
+                                            <thead class="text-xs text-gray-700 uppercase bg-gray-100">
+                                                <tr>
+                                                    <th class="px-4 py-2">要因</th>
+                                                    <th class="px-4 py-2">平方和</th>
+                                                    <th class="px-4 py-2">自由度</th>
+                                                    <th class="px-4 py-2">平均平方</th>
+                                                    <th class="px-4 py-2">F値</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr class="bg-white border-b">
+                                                    <td class="px-4 py-2 font-medium">群間</td>
+                                                    <td><?php echo round($anova_result['ss_between'], 2); ?></td>
+                                                    <td><?php echo $anova_result['df_between']; ?></td>
+                                                    <td><?php echo round($anova_result['ms_between'], 2); ?></td>
+                                                    <td rowspan="2" class="align-middle font-bold text-lg text-center"><?php echo round($anova_result['f_value'], 2); ?></td>
+                                                </tr>
+                                                <tr class="bg-white border-b">
+                                                    <td class="px-4 py-2 font-medium">群内</td>
+                                                    <td><?php echo round($anova_result['ss_within'], 2); ?></td>
+                                                    <td><?php echo $anova_result['df_within']; ?></td>
+                                                    <td><?php echo round($anova_result['ms_within'], 2); ?></td>
+                                                </tr>
+                                                <tr class="bg-gray-50">
+                                                    <td class="px-4 py-2 font-bold">合計</td>
+                                                    <td><?php echo round($anova_result['ss_between'] + $anova_result['ss_within'], 2); ?></td>
+                                                    <td><?php echo $anova_result['df_between'] + $anova_result['df_within']; ?></td>
+                                                    <td></td>
+                                                    <td></td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
                                     </div>
-                                <?php elseif ($anova_result['significance_level'] == 0.05): ?><div class="mt-4 bg-lime-100 border-l-4 border-lime-600 text-lime-900 p-4 rounded-lg shadow">
-                                        <p class="font-bold text-lg">結論: 有意差あり (p < 0.05) *</p>
-                                                <p class="mt-1">F値(<?php echo round($anova_result['f_value'], 2); ?>)は5%水準の臨界値(<?php echo round($anova_result['critical_value_05'], 2); ?>)を上回り、**統計的に意味のある差**があると考えられます。</p>
-                                    </div>
-                                <?php else: ?><div class="mt-4 bg-orange-100 border-l-4 border-orange-500 text-orange-800 p-4 rounded-lg shadow">
-                                        <p class="font-bold text-lg">結論: 有意差なし (p >= 0.05)</p>
-                                        <p class="mt-1">F値(<?php echo round($anova_result['f_value'], 2); ?>)は5%水準の臨界値(<?php echo round($anova_result['critical_value_05'], 2); ?>)を下回り、見られた差は**統計的に偶然の範囲**と判断されます。</p>
-                                    </div><?php endif; ?>
-                                <?php if (isset($tukey_result) && !empty($tukey_result)): ?><div class="mt-6 pt-4 border-t">
-                                        <h3 class="font-semibold mb-2">多重比較 (テューキーのHSD法) の結果</h3>
-                                        <p class="text-sm text-gray-600 mb-3">具体的にどのグループ間に差があるかを示します。</p>
-                                        <div class="overflow-x-auto">
-                                            <table class="w-full text-sm text-left text-gray-500">
-                                                <thead class="text-xs text-gray-700 uppercase bg-gray-100">
-                                                    <tr>
-                                                        <th class="px-4 py-2">比較ペア</th>
-                                                        <th class="px-4 py-2">平均値の差</th>
-                                                        <th class="px-4 py-2">判定</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody><?php foreach ($tukey_result as $result): ?><tr class="bg-white border-b">
-                                                            <td class="px-4 py-2 font-medium"><?php echo htmlspecialchars($result['pair']); ?></td>
-                                                            <td class="px-4 py-2"><?php echo round($result['mean_diff'], 2); ?></td>
-                                                            <td class="px-4 py-2 font-bold <?php echo $result['is_significant'] ? 'text-red-500' : 'text-gray-500'; ?>"><?php echo $result['is_significant'] ? '有意差あり' : '有意差なし'; ?></td>
-                                                        </tr><?php endforeach; ?></tbody>
-                                            </table>
+                                    <?php if ($anova_result['significance_level'] == 0.01): ?><div class="mt-4 bg-green-100 border-l-4 border-green-600 text-green-900 p-4 rounded-lg shadow">
+                                            <p class="font-bold text-lg">結論: 有意差あり (p < 0.01) **</p>
+                                                    <p class="mt-1">F値(<?php echo round($anova_result['f_value'], 2); ?>)は1%水準の臨界値(<?php echo round($anova_result['critical_value_01'], 2); ?>)を上回り、**極めて強い統計的な有意差**が認められます。</p>
                                         </div>
-                                    </div><?php endif; ?>
-                            <?php else: ?><p class="text-center text-gray-500 p-4">分散分析を行うには、各グループに複数のデータが必要です。</p><?php endif; ?>
+                                    <?php elseif ($anova_result['significance_level'] == 0.05): ?><div class="mt-4 bg-lime-100 border-l-4 border-lime-600 text-lime-900 p-4 rounded-lg shadow">
+                                            <p class="font-bold text-lg">結論: 有意差あり (p < 0.05) *</p>
+                                                    <p class="mt-1">F値(<?php echo round($anova_result['f_value'], 2); ?>)は5%水準の臨界値(<?php echo round($anova_result['critical_value_05'], 2); ?>)を上回り、**統計的に意味のある差**があると考えられます。</p>
+                                        </div>
+                                    <?php else: ?><div class="mt-4 bg-orange-100 border-l-4 border-orange-500 text-orange-800 p-4 rounded-lg shadow">
+                                            <p class="font-bold text-lg">結論: 有意差なし (p >= 0.05)</p>
+                                            <p class="mt-1">F値(<?php echo round($anova_result['f_value'], 2); ?>)は5%水準の臨界値(<?php echo round($anova_result['critical_value_05'], 2); ?>)を下回り、見られた差は**統計的に偶然の範囲**と判断されます。</p>
+                                        </div><?php endif; ?>
+                                    <?php if (isset($tukey_result) && !empty($tukey_result)): ?><div class="mt-6 pt-4 border-t">
+                                            <h3 class="font-semibold mb-2">多重比較 (テューキーのHSD法) の結果</h3>
+                                            <p class="text-sm text-gray-600 mb-3">具体的にどのグループ間に差があるかを示します。</p>
+                                            <div class="overflow-x-auto">
+                                                <table class="w-full text-sm text-left text-gray-500">
+                                                    <thead class="text-xs text-gray-700 uppercase bg-gray-100">
+                                                        <tr>
+                                                            <th class="px-4 py-2">比較ペア</th>
+                                                            <th class="px-4 py-2">平均値の差</th>
+                                                            <th class="px-4 py-2">判定</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody><?php foreach ($tukey_result as $result): ?><tr class="bg-white border-b">
+                                                                <td class="px-4 py-2 font-medium"><?php echo htmlspecialchars($result['pair']); ?></td>
+                                                                <td class="px-4 py-2"><?php echo round($result['mean_diff'], 2); ?></td>
+                                                                <td class="px-4 py-2 font-bold <?php echo $result['is_significant'] ? 'text-red-500' : 'text-gray-500'; ?>"><?php echo $result['is_significant'] ? '有意差あり' : '有意差なし'; ?></td>
+                                                            </tr><?php endforeach; ?></tbody>
+                                                </table>
+                                            </div>
+                                        </div><?php endif; ?>
+                                <?php else: ?><p class="text-center text-gray-500 p-4">分散分析を行うには、各グループに複数のデータが必要です。</p><?php endif; ?>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
-            <div id="advanced-analysis" class="tab-content <?php echo $active_tab == 'advanced' ? '' : 'hidden'; ?>">
-                <div class="bg-white p-6 rounded-b-xl shadow-lg">
-                    <h2 class="text-xl font-bold mb-4 text-gray-700">クロス集計と分散分析 (二元配置)</h2>
-                    <form method="POST" action="analysis.php#analysis" class="bg-gray-50 p-4 rounded-lg flex flex-wrap items-center gap-4 mb-6">
-                        <input type="hidden" name="submit_advanced" value="1">
-                        <div class="flex-grow"><label for="factor_a" class="text-sm font-medium text-gray-700">要因A (横軸):</label><select name="factor_a" id="factor_a" class="w-full mt-1 p-2 border border-gray-300 rounded-md"><?php foreach ($group_text_map as $key => $text): ?><option value="<?php echo $key; ?>" <?php if ($factorA_key == $key) echo 'selected'; ?>><?php echo $text; ?></option><?php endforeach; ?></select></div>
-                        <div class="flex-grow"><label for="factor_b" class="text-sm font-medium text-gray-700">要因B (凡例):</label><select name="factor_b" id="factor_b" class="w-full mt-1 p-2 border border-gray-300 rounded-md"><?php foreach ($group_text_map as $key => $text): ?><option value="<?php echo $key; ?>" <?php if ($factorB_key == $key) echo 'selected'; ?>><?php echo $text; ?></option><?php endforeach; ?></select></div>
-                        <div class="flex-grow"><label for="analysis_question_adv" class="text-sm font-medium text-gray-700">分析対象の質問:</label><select name="analysis_question" id="analysis_question_adv" class="w-full mt-1 p-2 border border-gray-300 rounded-md"><?php foreach ($questions_text as $key => $text): ?><option value="<?php echo $key; ?>" <?php if ($selected_question_key == $key) echo 'selected'; ?>><?php echo htmlspecialchars($text); ?></option><?php endforeach; ?></select></div>
-                        <button type="submit" class="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-md self-end">再分析</button>
-                    </form>
+                <div id="advanced-analysis" class="tab-content <?php echo $active_tab == 'advanced' ? '' : 'hidden'; ?>">
+                    <div class="bg-white p-6 rounded-b-xl shadow-lg">
+                        <h2 class="text-xl font-bold mb-4 text-gray-700">クロス集計と分散分析 (二元配置)</h2>
+                        <form method="POST" action="analysis.php#analysis" class="bg-gray-50 p-4 rounded-lg flex flex-wrap items-center gap-4 mb-6">
+                            <input type="hidden" name="submit_advanced" value="1">
+                            <div class="flex-grow"><label for="factor_a" class="text-sm font-medium text-gray-700">要因A (横軸):</label><select name="factor_a" id="factor_a" class="w-full mt-1 p-2 border border-gray-300 rounded-md"><?php foreach ($group_text_map as $key => $text): ?><option value="<?php echo $key; ?>" <?php if ($factorA_key == $key) echo 'selected'; ?>><?php echo $text; ?></option><?php endforeach; ?></select></div>
+                            <div class="flex-grow"><label for="factor_b" class="text-sm font-medium text-gray-700">要因B (凡例):</label><select name="factor_b" id="factor_b" class="w-full mt-1 p-2 border border-gray-300 rounded-md"><?php foreach ($group_text_map as $key => $text): ?><option value="<?php echo $key; ?>" <?php if ($factorB_key == $key) echo 'selected'; ?>><?php echo $text; ?></option><?php endforeach; ?></select></div>
+                            <div class="flex-grow"><label for="analysis_question_adv" class="text-sm font-medium text-gray-700">分析対象の質問:</label><select name="analysis_question" id="analysis_question_adv" class="w-full mt-1 p-2 border border-gray-300 rounded-md"><?php foreach ($questions_text as $key => $text): ?><option value="<?php echo $key; ?>" <?php if ($selected_question_key == $key) echo 'selected'; ?>><?php echo htmlspecialchars($text); ?></option><?php endforeach; ?></select></div>
+                            <button type="submit" class="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-md self-end">再分析</button>
+                        </form>
 
-                    <?php if ($anova2_result): ?>
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                            <div>
-                                <h3 class="font-semibold text-center mb-2">交互作用プロット</h3><canvas id="interactionPlot" class="p-4"></canvas>
-                                <div class="text-xs text-center text-gray-500 mt-2">※線が交差、または平行でない場合、交互作用の存在が示唆されます。</div>
-                            </div>
-                            <div>
-                                <h3 class="font-semibold mb-2">分散分析 結果の要約</h3>
-                                <div class="overflow-x-auto">
-                                    <table class="w-full text-sm text-left text-gray-500">
-                                        <thead class="text-xs text-gray-700 uppercase bg-gray-100">
-                                            <tr>
-                                                <th class="px-4 py-2">要因</th>
-                                                <th class="px-4 py-2">F値</th>
-                                                <th class="px-4 py-2">結果</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <tr class="bg-white border-b">
-                                                <td class="px-4 py-2 font-medium">主効果: <?php echo htmlspecialchars($group_text_map[$factorA_key]); ?></td>
-                                                <td class="px-4 py-2"><?php echo round($anova2_result['factor_A']['f'], 2); ?></td>
-                                                <td class="px-4 py-2 font-bold <?php echo $anova2_result['factor_A']['sig'] ? 'text-red-500' : ''; ?>"><?php echo $anova2_result['factor_A']['sig'] == 0.01 ? 'p < .01 **' : ($anova2_result['factor_A']['sig'] == 0.05 ? 'p < .05 *' : '有意差なし'); ?></td>
-                                            </tr>
-                                            <tr class="bg-white border-b">
-                                                <td class="px-4 py-2 font-medium">主効果: <?php echo htmlspecialchars($group_text_map[$factorB_key]); ?></td>
-                                                <td class="px-4 py-2"><?php echo round($anova2_result['factor_B']['f'], 2); ?></td>
-                                                <td class="px-4 py-2 font-bold <?php echo $anova2_result['factor_B']['sig'] ? 'text-red-500' : ''; ?>"><?php echo $anova2_result['factor_B']['sig'] == 0.01 ? 'p < .01 **' : ($anova2_result['factor_B']['sig'] == 0.05 ? 'p < .05 *' : '有意差なし'); ?></td>
-                                            </tr>
-                                            <tr class="bg-white border-b">
-                                                <td class="px-4 py-2 font-medium">交互作用</td>
-                                                <td class="px-4 py-2"><?php echo round($anova2_result['interaction']['f'], 2); ?></td>
-                                                <td class="px-4 py-2 font-bold <?php echo $anova2_result['interaction']['sig'] ? 'text-red-500' : ''; ?>"><?php echo $anova2_result['interaction']['sig'] == 0.01 ? 'p < .01 **' : ($anova2_result['interaction']['sig'] == 0.05 ? 'p < .05 *' : '有意差なし'); ?></td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                    <div class="text-xs text-gray-500 mt-1">* p < .05, ** p < .01</div>
+                        <?php if ($anova2_result): ?>
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                <div>
+                                    <h3 class="font-semibold text-center mb-2">交互作用プロット</h3><canvas id="interactionPlot" class="p-4"></canvas>
+                                    <div class="text-xs text-center text-gray-500 mt-2">※線が交差、または平行でない場合、交互作用の存在が示唆されます。</div>
+                                </div>
+                                <div>
+                                    <h3 class="font-semibold mb-2">分散分析 結果の要約</h3>
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-sm text-left text-gray-500">
+                                            <thead class="text-xs text-gray-700 uppercase bg-gray-100">
+                                                <tr>
+                                                    <th class="px-4 py-2">要因</th>
+                                                    <th class="px-4 py-2">F値</th>
+                                                    <th class="px-4 py-2">結果</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr class="bg-white border-b">
+                                                    <td class="px-4 py-2 font-medium">主効果: <?php echo htmlspecialchars($group_text_map[$factorA_key]); ?></td>
+                                                    <td class="px-4 py-2"><?php echo round($anova2_result['factor_A']['f'], 2); ?></td>
+                                                    <td class="px-4 py-2 font-bold <?php echo $anova2_result['factor_A']['sig'] ? 'text-red-500' : ''; ?>"><?php echo $anova2_result['factor_A']['sig'] == 0.01 ? 'p < .01 **' : ($anova2_result['factor_A']['sig'] == 0.05 ? 'p < .05 *' : '有意差なし'); ?></td>
+                                                </tr>
+                                                <tr class="bg-white border-b">
+                                                    <td class="px-4 py-2 font-medium">主効果: <?php echo htmlspecialchars($group_text_map[$factorB_key]); ?></td>
+                                                    <td class="px-4 py-2"><?php echo round($anova2_result['factor_B']['f'], 2); ?></td>
+                                                    <td class="px-4 py-2 font-bold <?php echo $anova2_result['factor_B']['sig'] ? 'text-red-500' : ''; ?>"><?php echo $anova2_result['factor_B']['sig'] == 0.01 ? 'p < .01 **' : ($anova2_result['factor_B']['sig'] == 0.05 ? 'p < .05 *' : '有意差なし'); ?></td>
+                                                </tr>
+                                                <tr class="bg-white border-b">
+                                                    <td class="px-4 py-2 font-medium">交互作用</td>
+                                                    <td class="px-4 py-2"><?php echo round($anova2_result['interaction']['f'], 2); ?></td>
+                                                    <td class="px-4 py-2 font-bold <?php echo $anova2_result['interaction']['sig'] ? 'text-red-500' : ''; ?>"><?php echo $anova2_result['interaction']['sig'] == 0.01 ? 'p < .01 **' : ($anova2_result['interaction']['sig'] == 0.05 ? 'p < .05 *' : '有意差なし'); ?></td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                        <div class="text-xs text-gray-500 mt-1">* p < .05, ** p < .01</div>
+                                        </div>
                                     </div>
                                 </div>
+                            <?php else: ?>
+                                <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-6 rounded-lg shadow-md text-center">
+                                    <p class="font-bold">二元配置分散分析を実行できません。</p>
+                                    <?php if ($anova2_error_message): ?>
+                                        <p class="mt-2 text-sm text-red-600 font-semibold"><?php echo htmlspecialchars($anova2_error_message); ?></p>
+                                    <?php else: ?>
+                                        <p class="mt-2 text-sm">各グループの組み合わせに、最低2件以上のデータが必要です。データ数を増やすか、別の組み合わせをお試しください。</p>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endif; ?>
                             </div>
-                        <?php else: ?>
-                            <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-6 rounded-lg shadow-md text-center">
-                                <p class="font-bold">二元配置分散分析を実行できません。</p>
-                                <?php if ($anova2_error_message): ?>
-                                    <p class="mt-2 text-sm text-red-600 font-semibold"><?php echo htmlspecialchars($anova2_error_message); ?></p>
-                                <?php else: ?>
-                                    <p class="mt-2 text-sm">各グループの組み合わせに、最低2件以上のデータが必要です。データ数を増やすか、別の組み合わせをお試しください。</p>
-                                <?php endif; ?>
-                            </div>
-                        <?php endif; ?>
-                        </div>
+                    </div>
+                <?php endif; ?>
+            <?php endif; ?>
                 </div>
-            <?php endif; ?>
-        <?php endif; ?>
-    </div>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const tabs = document.querySelectorAll('.tab-button');
-            const tabContents = document.querySelectorAll('.tab-content');
-            tabs.forEach(tab => {
-                tab.addEventListener('click', () => {
-                    const target = document.querySelector(tab.dataset.tabTarget);
-                    tabContents.forEach(content => content.classList.add('hidden'));
-                    if (target) target.classList.remove('hidden');
-                    tabs.forEach(t => t.classList.remove('active'));
-                    tab.classList.add('active');
-                });
-            });
-        });
-        <?php if ($total_count > 0): ?>
-            const pieChartOptions = {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'right',
-                        labels: {
-                            padding: 15
-                        }
-                    }
-                }
-            };
-            const pieColors = ['#60A5FA', '#F87171', '#4ADE80', '#FBBF24', '#A78BFA', '#F472B6'];
-            if (document.getElementById('genderChart') && <?php echo json_encode(!empty($gender_dist_counts)); ?>) {
-                new Chart(document.getElementById('genderChart'), {
-                    type: 'pie',
-                    data: {
-                        labels: <?php echo json_encode(array_keys($gender_dist_counts)); ?>,
-                        datasets: [{
-                            data: <?php echo json_encode(array_values($gender_dist_counts)); ?>,
-                            backgroundColor: pieColors
-                        }]
-                    },
-                    options: pieChartOptions
-                });
-            }
-            if (document.getElementById('ageChart') && <?php echo json_encode(!empty($age_dist_counts)); ?>) {
-                new Chart(document.getElementById('ageChart'), {
-                    type: 'pie',
-                    data: {
-                        labels: <?php echo json_encode(array_keys($age_dist_counts)); ?>,
-                        datasets: [{
-                            data: <?php echo json_encode(array_values($age_dist_counts)); ?>,
-                            backgroundColor: pieColors
-                        }]
-                    },
-                    options: pieChartOptions
-                });
-            }
-            if (document.getElementById('incomeChart') && <?php echo json_encode(!empty($income_dist_counts)); ?>) {
-                new Chart(document.getElementById('incomeChart'), {
-                    type: 'pie',
-                    data: {
-                        labels: <?php echo json_encode(array_keys($income_dist_counts)); ?>,
-                        datasets: [{
-                            data: <?php echo json_encode(array_values($income_dist_counts)); ?>,
-                            backgroundColor: pieColors
-                        }]
-                    },
-                    options: pieChartOptions
-                });
-            }
-            const radarDatasets = [{
-                label: '全体の平均評価点',
-                data: <?php echo json_encode($radar_avg_scores); ?>,
-                fill: true,
-                backgroundColor: 'rgba(59, 130, 246, 0.2)',
-                borderColor: 'rgb(59, 130, 246)',
-                pointBackgroundColor: 'rgb(59, 130, 246)'
-            }];
-            if (document.getElementById('radarChart')) {
-                new Chart(document.getElementById('radarChart'), {
-                    type: 'radar',
-                    data: {
-                        labels: <?php echo json_encode(array_values($questions_text)); ?>,
-                        datasets: radarDatasets
-                    },
-                    options: {
-                        scales: {
-                            r: {
-                                beginAtZero: true,
-                                max: 5,
-                                pointLabels: {
-                                    font: {
-                                        size: window.innerWidth > 768 ? 12 : 9
+                <script>
+                    document.addEventListener('DOMContentLoaded', function() {
+                        const tabs = document.querySelectorAll('.tab-button');
+                        const tabContents = document.querySelectorAll('.tab-content');
+                        tabs.forEach(tab => {
+                            tab.addEventListener('click', () => {
+                                const target = document.querySelector(tab.dataset.tabTarget);
+                                tabContents.forEach(content => content.classList.add('hidden'));
+                                if (target) target.classList.remove('hidden');
+                                tabs.forEach(t => t.classList.remove('active'));
+                                tab.classList.add('active');
+                            });
+                        });
+                    });
+                    <?php if ($total_count > 0): ?>
+                        const pieChartOptions = {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'right',
+                                    labels: {
+                                        padding: 15
                                     }
                                 }
                             }
-                        },
-                        plugins: {
-                            legend: {
-                                position: 'bottom'
-                            }
+                        };
+                        const pieColors = ['#60A5FA', '#F87171', '#4ADE80', '#FBBF24', '#A78BFA', '#F472B6'];
+                        if (document.getElementById('genderChart') && <?php echo json_encode(!empty($gender_dist_counts)); ?>) {
+                            new Chart(document.getElementById('genderChart'), {
+                                type: 'pie',
+                                data: {
+                                    labels: <?php echo json_encode(array_keys($gender_dist_counts)); ?>,
+                                    datasets: [{
+                                        data: <?php echo json_encode(array_values($gender_dist_counts)); ?>,
+                                        backgroundColor: pieColors
+                                    }]
+                                },
+                                options: pieChartOptions
+                            });
                         }
-                    }
-                });
-            }
-            <?php if ($anova_result && !empty($chart_data)): ?>
-                if (document.getElementById('crossAnalysisChart')) {
-                    new Chart(document.getElementById('crossAnalysisChart'), {
-                        type: 'bar',
-                        data: {
-                            labels: <?php echo json_encode($chart_labels); ?>,
-                            datasets: [{
-                                label: '平均評価点',
-                                data: <?php echo json_encode($chart_data); ?>,
-                                backgroundColor: pieColors
-                            }]
-                        },
-                        options: {
-                            indexAxis: 'y',
-                            scales: {
-                                x: {
-                                    beginAtZero: true,
-                                    max: 5
-                                }
-                            },
-                            plugins: {
-                                legend: {
-                                    display: false
-                                }
-                            }
+                        if (document.getElementById('ageChart') && <?php echo json_encode(!empty($age_dist_counts)); ?>) {
+                            new Chart(document.getElementById('ageChart'), {
+                                type: 'pie',
+                                data: {
+                                    labels: <?php echo json_encode(array_keys($age_dist_counts)); ?>,
+                                    datasets: [{
+                                        data: <?php echo json_encode(array_values($age_dist_counts)); ?>,
+                                        backgroundColor: pieColors
+                                    }]
+                                },
+                                options: pieChartOptions
+                            });
                         }
-                    });
-                }
-            <?php endif; ?>
-            <?php if ($anova2_result): ?>
-                const interactionPlotDatasets = <?php echo json_encode($interaction_plot_data); ?>.map((dataset, index) => ({
-                    ...dataset,
-                    borderColor: pieColors[index % pieColors.length],
-                    backgroundColor: pieColors[index % pieColors.length],
-                    tension: 0.1
-                }));
-                if (document.getElementById('interactionPlot')) {
-                    new Chart(document.getElementById('interactionPlot'), {
-                        type: 'line',
-                        data: {
-                            labels: <?php echo json_encode($anova2_result['factorA_levels']); ?>,
-                            datasets: interactionPlotDatasets
-                        },
-                        options: {
-                            scales: {
-                                y: {
-                                    beginAtZero: true,
-                                    max: 5,
-                                    title: {
-                                        display: true,
-                                        text: '平均評価点'
+                        if (document.getElementById('incomeChart') && <?php echo json_encode(!empty($income_dist_counts)); ?>) {
+                            new Chart(document.getElementById('incomeChart'), {
+                                type: 'pie',
+                                data: {
+                                    labels: <?php echo json_encode(array_keys($income_dist_counts)); ?>,
+                                    datasets: [{
+                                        data: <?php echo json_encode(array_values($income_dist_counts)); ?>,
+                                        backgroundColor: pieColors
+                                    }]
+                                },
+                                options: pieChartOptions
+                            });
+                        }
+                        const radarDatasets = [{
+                            label: '全体の平均評価点',
+                            data: <?php echo json_encode($radar_avg_scores); ?>,
+                            fill: true,
+                            backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                            borderColor: 'rgb(59, 130, 246)',
+                            pointBackgroundColor: 'rgb(59, 130, 246)'
+                        }];
+                        if (document.getElementById('radarChart')) {
+                            new Chart(document.getElementById('radarChart'), {
+                                type: 'radar',
+                                data: {
+                                    labels: <?php echo json_encode(array_values($questions_text)); ?>,
+                                    datasets: radarDatasets
+                                },
+                                options: {
+                                    scales: {
+                                        r: {
+                                            beginAtZero: true,
+                                            max: 5,
+                                            pointLabels: {
+                                                font: {
+                                                    size: window.innerWidth > 768 ? 12 : 9
+                                                }
+                                            }
+                                        }
+                                    },
+                                    plugins: {
+                                        legend: {
+                                            position: 'bottom'
+                                        }
                                     }
                                 }
-                            },
-                            plugins: {
-                                legend: {
-                                    position: 'bottom'
-                                }
-                            }
+                            });
                         }
-                    });
-                }
-            <?php endif; ?>
-        <?php endif; ?>
-    </script>
+                        <?php if ($anova_result && !empty($chart_data)): ?>
+                            if (document.getElementById('crossAnalysisChart')) {
+                                new Chart(document.getElementById('crossAnalysisChart'), {
+                                    type: 'bar',
+                                    data: {
+                                        labels: <?php echo json_encode($chart_labels); ?>,
+                                        datasets: [{
+                                            label: '平均評価点',
+                                            data: <?php echo json_encode($chart_data); ?>,
+                                            backgroundColor: pieColors
+                                        }]
+                                    },
+                                    options: {
+                                        indexAxis: 'y',
+                                        scales: {
+                                            x: {
+                                                beginAtZero: true,
+                                                max: 5
+                                            }
+                                        },
+                                        plugins: {
+                                            legend: {
+                                                display: false
+                                            }
+                                        }
+                                    }
+                                });
+                            }
+                        <?php endif; ?>
+                        <?php if ($anova2_result): ?>
+                            const interactionPlotDatasets = <?php echo json_encode($interaction_plot_data); ?>.map((dataset, index) => ({
+                                ...dataset,
+                                borderColor: pieColors[index % pieColors.length],
+                                backgroundColor: pieColors[index % pieColors.length],
+                                tension: 0.1
+                            }));
+                            if (document.getElementById('interactionPlot')) {
+                                new Chart(document.getElementById('interactionPlot'), {
+                                    type: 'line',
+                                    data: {
+                                        labels: <?php echo json_encode($anova2_result['factorA_levels']); ?>,
+                                        datasets: interactionPlotDatasets
+                                    },
+                                    options: {
+                                        scales: {
+                                            y: {
+                                                beginAtZero: true,
+                                                max: 5,
+                                                title: {
+                                                    display: true,
+                                                    text: '平均評価点'
+                                                }
+                                            }
+                                        },
+                                        plugins: {
+                                            legend: {
+                                                position: 'bottom'
+                                            }
+                                        }
+                                    }
+                                });
+                            }
+                        <?php endif; ?>
+                    <?php endif; ?>
+                </script>
 </body>
 
 </html>

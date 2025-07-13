@@ -33,6 +33,11 @@
                     アンケートへ戻る
                 </a>
             </div>
+             <div class="text-center mt-4">
+                 <a href="register.php" class="inline-block align-baseline font-bold text-sm text-gray-600 hover:text-gray-800">
+                    新規登録はこちら
+                </a>
+            </div>
         </form>
     </div>
 </body>
