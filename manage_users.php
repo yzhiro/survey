@@ -39,7 +39,6 @@ try {
             <table class="w-full text-sm text-left">
                 <thead class="bg-gray-100 text-xs text-gray-700 uppercase">
                     <tr>
-                        <th class="px-4 py-3">ID</th>
                         <th class="px-4 py-3">ユーザー名</th>
                         <th class="px-4 py-3">権限</th>
                         <th class="px-4 py-3">登録日時</th>
@@ -49,7 +48,6 @@ try {
                 <tbody>
                     <?php foreach ($users as $user): ?>
                     <tr class="bg-white border-b hover:bg-gray-50">
-                        <td class="px-4 py-3"><?php echo htmlspecialchars($user['id']); ?></td>
                         <td class="px-4 py-3"><?php echo htmlspecialchars($user['username']); ?></td>
                         <td class="px-4 py-3">
                             <form action="update_user_role.php" method="POST" class="inline-flex items-center">
