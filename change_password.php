@@ -1,11 +1,8 @@
 <?php
-session_start();
+require_once __DIR__ . '/init.php';
 
-// ログインしていなければ、ログインページにリダイレクト
-if (!isset($_SESSION['user'])) {
-    header('Location: login.php');
-    exit();
-}
+// ログイン必須 (init.php経由で読み込まれたfunctions.phpの関数を利用)
+require_login();
 ?>
 <!DOCTYPE html>
 <html lang="ja">

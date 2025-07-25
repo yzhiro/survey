@@ -1,13 +1,9 @@
 <?php
-session_start();
+require_once __DIR__ . '/init.php';
 
-// 管理者でなければアクセス不可
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
-    header('Location: login.php');
-    exit();
-}
+// 権限チェック (管理者のみ)
+require_role(['admin']);
 
-require_once 'db_connect.php';
 $users = [];
 try {
     $pdo = get_pdo_connection();

@@ -1,12 +1,8 @@
 <?php
-session_start();
-require_once 'db_connect.php';
+require_once __DIR__ . '/init.php';
 
-// ログインチェック
-if (!isset($_SESSION['user'])) {
-    header('Location: login.php');
-    exit();
-}
+// ログイン必須
+require_login();
 
 // POSTリクエストでなければリダイレクト
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {

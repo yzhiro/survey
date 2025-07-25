@@ -1,13 +1,8 @@
 <?php
-session_start();
+require_once __DIR__ . '/init.php';
 
-// 管理者でなければアクセス不可
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
-    header('Location: login.php');
-    exit();
-}
-
-require_once 'db_connect.php';
+// 権限チェック (管理者のみ)
+require_role(['admin']);
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Location: manage_users.php');

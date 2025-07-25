@@ -1,13 +1,8 @@
 <?php
-session_start();
+require_once __DIR__ . '/init.php';
 
-// 管理者または中間管理者でなければアクセス不可
-if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['admin', 'editor'])) {
-    header('Location: analysis.php'); // or login.php
-    exit();
-}
-
-require_once 'db_connect.php';
+// 権限チェック (管理者 or 編集者)
+require_role(['admin', 'editor']);
 
 // POSTリクエストでなければ何もせず終了
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
