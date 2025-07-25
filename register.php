@@ -1,3 +1,21 @@
+<?php
+// --- ロジック ---
+require_once __DIR__ . '/init.php';
+
+// ログイン済みの場合は分析ページへリダイレクト
+if (isset($_SESSION['user'])) {
+    redirect('analysis.php');
+}
+
+// CSRFトークンを生成
+$csrf_token = generate_csrf_token();
+
+// セッションからエラーメッセージを取得し、表示後に削除
+$error_message = $_SESSION['error'] ?? null;
+unset($_SESSION['error']);
+
+// --- ビュー ---
+?>
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -10,13 +28,13 @@
     <div class="w-full max-w-xs">
         <form action="register_process.php" method="POST" class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
             <h1 class="text-2xl font-bold text-center mb-6">ユーザー登録</h1>
-            <?php
-            session_start();
-            if (isset($_SESSION['error'])) {
-                echo '<p class="text-red-500 text-xs italic mb-4">' . htmlspecialchars($_SESSION['error']) . '</p>';
-                unset($_SESSION['error']);
-            }
-            ?>
+            
+            <?php if ($error_message): ?>
+                <p class="text-red-500 text-xs italic mb-4"><?php echo h($error_message); ?></p>
+            <?php endif; ?>
+
+            <input type="hidden" name="csrf_token" value="<?php echo h($csrf_token); ?>">
+
             <div class="mb-4">
                 <label for="username" class="block text-gray-700 text-sm font-bold mb-2">ユーザー名</label>
                 <input type="text" name="username" id="username" required class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">

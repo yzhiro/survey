@@ -1,29 +1,34 @@
 <?php
-session_start();
+// --- ロジック ---
+require_once __DIR__ . '/init.php';
 
-// 管理者(admin)または中間管理者(editor)としてログインしているかチェック
-if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['admin', 'editor'])) {
-    $_SESSION['error'] = 'このページにアクセスする権限がありません。';
-    header('Location: analysis.php'); // 権限がない場合は分析ページへ戻す
-    exit();
-}
+// 権限チェック (管理者 or 編集者)
+require_role(['admin', 'editor']);
 
-// データベース接続とデータ取得
-require_once 'db_connect.php';
 $all_data = [];
+$error_message = null;
+
 try {
     $pdo = get_pdo_connection();
-    $stmt = $pdo->query("SELECT * FROM survey_db ORDER BY id DESC"); // 新しい順に表示
+    $stmt = $pdo->query("SELECT * FROM survey_db ORDER BY id DESC");
     $all_data = $stmt->fetchAll();
 } catch (PDOException $e) {
-    // エラーの場合はメッセージを表示
-    $error_message = "データベースの読み込みに失敗しました: " . $e->getMessage();
+    error_log('View Data Error: ' . $e->getMessage());
+    $error_message = "データベースの読み込み中にエラーが発生しました。";
 }
 
-// 質問項目とカラム名の対応（IDを非表示に）
+// 質問項目とカラム名の対応
 $questions_map = [
-    'age' => '年齢', 'gender' => '性別', 'income' => '年収(万)', 'disability' => '障害有無', 'q1' => 'Q1', 'q2' => 'Q2', 'q3' => 'Q3', 'q4' => 'Q4', 'q5' => 'Q5', 'q6' => 'Q6', 'q7' => 'Q7', 'q8' => 'Q8', 'q9' => 'Q9', 'q10' => 'Q10', 'submitted_at' => '回答日時'
+    'age' => '年齢', 'gender' => '性別', 'income' => '年収(万)', 'disability' => '障害有無',
+    'q1' => 'Q1', 'q2' => 'Q2', 'q3' => 'Q3', 'q4' => 'Q4', 'q5' => 'Q5',
+    'q6' => 'Q6', 'q7' => 'Q7', 'q8' => 'Q8', 'q9' => 'Q9', 'q10' => 'Q10',
+    'submitted_at' => '回答日時'
 ];
+
+// CSRFトークンを生成 (削除処理用)
+$csrf_token = generate_csrf_token();
+
+// --- ビュー ---
 ?>
 <!DOCTYPE html>
 <html lang="ja">
@@ -43,10 +48,10 @@ $questions_map = [
             </div>
         </div>
 
-        <?php if (isset($error_message)): ?>
+        <?php if ($error_message): ?>
             <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
                 <strong class="font-bold">エラー:</strong>
-                <span class="block sm:inline"><?php echo htmlspecialchars($error_message); ?></span>
+                <span class="block sm:inline"><?php echo h($error_message); ?></span>
             </div>
         <?php elseif (empty($all_data)): ?>
             <p class="text-center text-gray-500">データはまだありません。</p>
@@ -56,7 +61,7 @@ $questions_map = [
                     <thead class="bg-gray-100 text-xs text-gray-700 uppercase">
                         <tr>
                             <?php foreach (array_values($questions_map) as $label): ?>
-                                <th class="px-4 py-3 whitespace-nowrap"><?php echo $label; ?></th>
+                                <th class="px-4 py-3 whitespace-nowrap"><?php echo h($label); ?></th>
                             <?php endforeach; ?>
                             <th class="px-4 py-3 whitespace-nowrap">操作</th>
                         </tr>
@@ -66,12 +71,17 @@ $questions_map = [
                         <tr class="bg-white border-b hover:bg-gray-50">
                             <?php foreach (array_keys($questions_map) as $key): ?>
                             <td class="px-4 py-3 whitespace-nowrap">
-                                <?php echo htmlspecialchars($row[$key]); ?>
+                                <?php echo h($row[$key]); ?>
                             </td>
                             <?php endforeach; ?>
-                            <td class="px-4 py-3 whitespace-nowrap">
-                                <a href="edit_form.php?id=<?php echo $row['id']; ?>" class="bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 rounded text-xs">編集</a>
-                                <a href="delete_data.php?id=<?php echo $row['id']; ?>" onclick="return confirm('本当にこのデータを削除しますか？(ID: <?php echo $row['id']; ?>)');" class="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded text-xs ml-1">削除</a>
+                            <td class="px-4 py-3 whitespace-nowrap flex items-center">
+                                <a href="edit_form.php?id=<?php echo h($row['id']); ?>" class="bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 rounded text-xs">編集</a>
+                                
+                                <form action="delete_data.php" method="POST" class="inline-block ml-1">
+                                    <input type="hidden" name="id" value="<?php echo h($row['id']); ?>">
+                                    <input type="hidden" name="csrf_token" value="<?php echo h($csrf_token); ?>">
+                                    <button type="submit" onclick="return confirm('本当にこのデータを削除しますか？(ID: <?php echo h($row['id']); ?>)');" class="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded text-xs">削除</button>
+                                </form>
                             </td>
                         </tr>
                         <?php endforeach; ?>

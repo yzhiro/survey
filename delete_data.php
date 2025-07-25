@@ -1,41 +1,43 @@
 <?php
-session_start();
+// --- ロジック ---
+require_once __DIR__ . '/init.php';
 
-// 管理者または中間管理者でなければアクセス不可
-if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['admin', 'editor'])) {
-    header('Location: analysis.php'); // or login.php
-    exit();
+// POSTリクエストかチェック
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    $_SESSION['error'] = '不正なアクセスです。';
+    redirect('view_data.php');
 }
 
-// データベース接続とIDの取得
-require_once 'db_connect.php';
-$id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
+// 権限チェック (管理者 or 編集者)
+require_role(['admin', 'editor'], 'view_data.php');
+
+// CSRFトークンを検証
+if (!validate_csrf_token($_POST['csrf_token'] ?? null)) {
+    $_SESSION['error'] = '不正なリクエストです。';
+    redirect('view_data.php');
+}
+
+$id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
 
 // IDが無効ならリダイレクト
 if (!$id) {
-    header('Location: view_data.php');
-    exit();
+    $_SESSION['error'] = '無効なIDです。';
+    redirect('view_data.php');
 }
 
 try {
-    // データベースに接続
     $pdo = get_pdo_connection();
-
-    // SQL文を準備 (プリペアドステートメント)
     $sql = "DELETE FROM survey_db WHERE id = :id";
     $stmt = $pdo->prepare($sql);
     $stmt->bindValue(':id', $id, PDO::PARAM_INT);
-
-    // SQLを実行
     $stmt->execute();
-
 } catch (PDOException $e) {
-    // エラーが発生した場合はメッセージを表示して終了
-    // 本番環境では、エラーログに記録するなどの処理が望ましい
-    exit('データベース処理中にエラーが発生しました: ' . $e->getMessage());
+    error_log('Delete Data Error: ' . $e->getMessage());
+    $_SESSION['error'] = 'データベース処理中にエラーが発生しました。';
+    redirect('view_data.php');
 }
 
 // データ一覧ページにリダイレクト
-header('Location: view_data.php');
-exit();
+$_SESSION['success'] = 'データを削除しました。';
+redirect('view_data.php');
 ?>

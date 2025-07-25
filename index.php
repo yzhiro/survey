@@ -1,3 +1,20 @@
+<?php
+// --- ロジック ---
+require_once __DIR__ . '/init.php';
+
+// CSRFトークンを生成
+$csrf_token = generate_csrf_token();
+
+// 質問項目データ
+$questions = [
+    'q1' => '世界遺産のドキュメンタリー動画を観ることに、どのくらい興味がありますか？', 'q2' => 'VRゴーグルを使って、世界遺産を仮想旅行体験することに、どのくらい興味がありますか？', 'q3' => '歴史的背景や専門家の解説付きの動画コンテンツに、どのくらい魅力を感じますか？', 'q4' => '4K/8Kなどの高画質で撮影された世界遺産の映像に、どのくらい価値を感じますか？', 'q5' => '高品質な世界遺産動画が見放題のサービスがあれば、月々500円程度を支払うことに抵抗はありませんか？', 'q6' => 'VRでのリアルな旅行体験ができるサービスがあれば、月々1,500円程度を支払うことに抵抗はありませんか？', 'q7' => '新しい世界遺産コンテンツが毎週追加されることに、どのくらい魅力を感じますか？', 'q8' => 'スマートフォンやタブレットで、手軽に世界遺産コンテンツを楽しめることは、どのくらい重要ですか？', 'q9' => '子ども向けの教育コンテンツとして、世界遺産動画やVRを利用することに、どのくらい関心がありますか？', 'q10' => '旅行先の候補として、動画やVRで観た世界遺産を選ぶ可能性はどのくらいありますか？',
+];
+$labels = [
+    'q1' => ['全く興味がない', '非常に興味がある'], 'q2' => ['全く興味がない', '非常に興味がある'], 'q3' => ['全く魅力がない', '非常に魅力的'], 'q4' => ['全く価値を感じない', '非常に価値を感じる'], 'q5' => ['非常に抵抗がある', '全く抵抗がない'], 'q6' => ['非常に抵抗がある', '全く抵抗がない'], 'q7' => ['全く魅力がない', '非常に魅力的'], 'q8' => ['全く重要でない', '非常に重要'], 'q9' => ['全く関心がない', '非常に関心がある'], 'q10' => ['全くない', '非常にある']
+];
+
+// --- ビュー ---
+?>
 <!DOCTYPE html>
 <html lang="ja">
 
@@ -27,6 +44,7 @@
             </div>
 
             <form action="submit.php" method="POST">
+                <input type="hidden" name="csrf_token" value="<?php echo h($csrf_token); ?>">
 
                 <div class="mb-12">
                     <h2 class="text-2xl font-semibold mb-6 border-l-4 border-blue-500 pl-4">あなたについて教えてください</h2>
@@ -60,49 +78,20 @@
                 <div>
                     <h2 class="text-2xl font-semibold mb-6 border-l-4 border-blue-500 pl-4">サービスへの興味について</h2>
                     <div class="space-y-8">
-                        <?php
-                        $questions = [
-                            'q1' => '世界遺産のドキュメンタリー動画を観ることに、どのくらい興味がありますか？',
-                            'q2' => 'VRゴーグルを使って、世界遺産を仮想旅行体験することに、どのくらい興味がありますか？',
-                            'q3' => '歴史的背景や専門家の解説付きの動画コンテンツに、どのくらい魅力を感じますか？',
-                            'q4' => '4K/8Kなどの高画質で撮影された世界遺産の映像に、どのくらい価値を感じますか？',
-                            'q5' => '高品質な世界遺産動画が見放題のサービスがあれば、月々500円程度を支払うことに抵抗はありませんか？',
-                            'q6' => 'VRでのリアルな旅行体験ができるサービスがあれば、月々1,500円程度を支払うことに抵抗はありませんか？',
-                            'q7' => '新しい世界遺産コンテンツが毎週追加されることに、どのくらい魅力を感じますか？',
-                            'q8' => 'スマートフォンやタブレットで、手軽に世界遺産コンテンツを楽しめることは、どのくらい重要ですか？',
-                            'q9' => '子ども向けの教育コンテンツとして、世界遺産動画やVRを利用することに、どのくらい関心がありますか？',
-                            'q10' => '旅行先の候補として、動画やVRで観た世界遺産を選ぶ可能性はどのくらいありますか？',
-                        ];
-
-                        $labels = [
-                            'q1' => ['全く興味がない', '非常に興味がある'],
-                            'q2' => ['全く興味がない', '非常に興味がある'],
-                            'q3' => ['全く魅力がない', '非常に魅力的'],
-                            'q4' => ['全く価値を感じない', '非常に価値を感じる'],
-                            'q5' => ['非常に抵抗がある', '全く抵抗がない'],
-                            'q6' => ['非常に抵抗がある', '全く抵抗がない'],
-                            'q7' => ['全く魅力がない', '非常に魅力的'],
-                            'q8' => ['全く重要でない', '非常に重要'],
-                            'q9' => ['全く関心がない', '非常に関心がある'],
-                            'q10' => ['全くない', '非常にある']
-                        ];
-
-                        foreach ($questions as $key => $text):
-                        ?>
+                        <?php foreach ($questions as $key => $text) : ?>
                             <div class="bg-gray-50 p-5 rounded-lg border border-gray-200">
-                                <p class="font-semibold text-gray-800 mb-4"><?php echo "Q" . substr($key, 1) . ". " . $text; ?></p>
-
+                                <p class="font-semibold text-gray-800 mb-4"><?php echo "Q" . substr($key, 1) . ". " . h($text); ?></p>
                                 <div class="flex items-center justify-between">
-                                    <span class="text-sm text-gray-600 text-center w-1/5"><?php echo $labels[$key][0]; ?></span>
+                                    <span class="text-sm text-gray-600 text-center w-1/5"><?php echo h($labels[$key][0]); ?></span>
                                     <div class="flex-grow grid grid-cols-5 gap-2 mx-4">
-                                        <?php for ($i = 1; $i <= 5; $i++): ?>
+                                        <?php for ($i = 1; $i <= 5; $i++) : ?>
                                             <label class="flex flex-col items-center justify-center p-2 rounded-lg border-2 border-gray-200 cursor-pointer hover:bg-blue-100 hover:border-blue-400 has-[:checked]:bg-blue-100 has-[:checked]:border-blue-500 transition-colors">
-                                                <input type="radio" name="answers[<?php echo $key; ?>]" value="<?php echo $i; ?>" required class="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500 mb-1">
+                                                <input type="radio" name="answers[<?php echo h($key); ?>]" value="<?php echo $i; ?>" required class="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500 mb-1">
                                                 <span class="text-base font-bold"><?php echo $i; ?></span>
                                             </label>
                                         <?php endfor; ?>
                                     </div>
-                                    <span class="text-sm text-gray-600 text-center w-1/5"><?php echo $labels[$key][1]; ?></span>
+                                    <span class="text-sm text-gray-600 text-center w-1/5"><?php echo h($labels[$key][1]); ?></span>
                                 </div>
                             </div>
                         <?php endforeach; ?>
