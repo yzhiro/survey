@@ -303,6 +303,14 @@ if ($anova2_result) {
                 <a href="manage_users.php" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg text-sm">ユーザー管理</a>
             <?php endif; ?>
             <a href="index.php" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">アンケートトップ</a>
+            
+            <span class="font-bold ml-auto">ダウンロード:</span>
+            <?php if (in_array($_SESSION['role'], ['admin', 'editor'])): ?>
+                 <a href="download.php?type=survey" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg text-sm">アンケート結果 (CSV)</a>
+            <?php endif; ?>
+             <?php if ($_SESSION['role'] === 'admin'): ?>
+                <a href="download.php?type=users" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-lg text-sm">ユーザーリスト (CSV)</a>
+            <?php endif; ?>
         </nav>
 
         <?php if ($error_message): ?>

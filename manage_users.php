@@ -27,6 +27,7 @@ try {
             <h1 class="text-3xl font-bold text-gray-800">ユーザー管理</h1>
             <div>
                  <a href="analysis.php" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">分析レポート</a>
+                 <a href="download.php?type=users" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-lg text-sm ml-2">ユーザーリスト (CSV)</a>
                  <a href="logout.php" class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg text-sm ml-2">ログアウト</a>
             </div>
         </div>
