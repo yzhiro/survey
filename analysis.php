@@ -137,11 +137,19 @@ function calculate_anova($data, $group_key, $value_key)
         $all_values[] = $value;
     }
 
+    foreach ($groups as $name => $values) {
+        if (count($values) < 2) {
+            unset($groups[$name]);
+        }
+    }
+
     $k = count($groups); // 群の数
-    $n_total = count($all_values); // 全データ数
+    $n_total = 0;
+    foreach($groups as $values) $n_total += count($values);
+
     if ($k < 2 || $n_total < 3) return null;
 
-    $grand_mean = array_sum($all_values) / $n_total;
+    $grand_mean = array_sum($all_values) / count($all_values);
 
     $ss_between = 0;
     $ss_within = 0;
@@ -165,12 +173,9 @@ function calculate_anova($data, $group_key, $value_key)
 
     $f_value = ($ms_within > 0) ? $ms_between / $ms_within : 0;
     
-    // 簡易的なp値の代わりにF値と自由度を返す。厳密なp値計算は複雑なため省略。
-    // F分布の上側確率を元に有意水準を判定
     $significance_level = 0;
-    // ここでは簡易的にF値がある程度大きい場合に有意とする (簡易的な判定)
-    if ($f_value > 3) $significance_level = 0.05; // 実際のF分布表とは異なります
-    if ($f_value > 5) $significance_level = 0.01; // 実際のF分布表とは異なります
+    if ($f_value > 2.5) $significance_level = 0.05; // 簡易的な閾値
+    if ($f_value > 4.0) $significance_level = 0.01; // 簡易的な閾値
 
     return [
         'df_between' => $df_between, 'ss_between' => $ss_between, 'ms_between' => $ms_between,
@@ -188,9 +193,7 @@ function calculate_tukey_hsd($groups, $ms_within, $df_within)
     $k = count($groups);
     if ($k < 2 || $ms_within <= 0) return null;
     
-    // テューキーのq統計量のクリティカル値 (簡易的なテーブル)
-    // 実際の値はα=0.05, k(群数), df(群内自由度)に依存する
-    $q_critical = 3.5; // 仮の値
+    $q_critical = 3.63; // α=0.05, k=3, df=∞ の場合に近い値（簡易）
 
     $means = [];
     foreach ($groups as $name => $values) {
@@ -208,7 +211,9 @@ function calculate_tukey_hsd($groups, $ms_within, $df_within)
             $n1 = $means[$name1]['n'];
             $n2 = $means[$name2]['n'];
             
-            $hsd = $q_critical * sqrt($ms_within / (($n1 + $n2) / 2));
+            if($n1 == 0 || $n2 == 0) continue;
+
+            $hsd = $q_critical * sqrt($ms_within * (1/$n1 + 1/$n2) / 2);
             $diff = abs($mean1 - $mean2);
 
             $comparisons[] = [
@@ -225,114 +230,104 @@ function calculate_tukey_hsd($groups, $ms_within, $df_within)
  * 二元配置分散分析 (Two-way ANOVA) を計算する
  */
 function calculate_two_way_anova($data, $factorA_key, $factorB_key, $value_key) {
-    // データ構造の初期化
     $cells = [];
-    $factorA_levels = [];
-    $factorB_levels = [];
     $all_values = [];
-
-    // データを行列形式に整理
     foreach ($data as $row) {
         if (!isset($row[$factorA_key]) || !isset($row[$factorB_key]) || !isset($row['answers'][$value_key])) continue;
         $a_level = $row[$factorA_key];
         $b_level = $row[$factorB_key];
-        $value = $row['answers'][$value_key];
-
+        $value = (float)$row['answers'][$value_key];
         $cells[$a_level][$b_level][] = $value;
-        $factorA_levels[$a_level] = true;
-        $factorB_levels[$b_level] = true;
         $all_values[] = $value;
     }
 
-    $factorA_levels = array_keys($factorA_levels);
-    $factorB_levels = array_keys($factorB_levels);
-    sort($factorA_levels);
-    sort($factorB_levels);
-    
-    $a = count($factorA_levels); // 要因Aの水準数
-    $b = count($factorB_levels); // 要因Bの水準数
-    $N = count($all_values); // 全データ数
-
-    // 各セルのデータ数が2以上ないと計算できない
-    $n_min = PHP_INT_MAX;
-    foreach ($cells as $a_level => $b_data) {
-        foreach ($b_data as $b_level => $values) {
-            $n_min = min($n_min, count($values));
+    $factorA_levels = array_keys($cells);
+    $factorB_levels = [];
+    foreach($cells as $a_level => $b_data){
+        foreach($b_data as $b_level => $values){
+            if(!in_array($b_level, $factorB_levels)) $factorB_levels[] = $b_level;
         }
     }
-    if ($n_min < 2) {
-        return "各グループの組み合わせに最低2件以上のデータが必要です。";
+    sort($factorA_levels);
+    sort($factorB_levels);
+
+    foreach ($factorA_levels as $a_level) {
+        foreach ($factorB_levels as $b_level) {
+            if (!isset($cells[$a_level][$b_level]) || count($cells[$a_level][$b_level]) < 2) {
+                return "各グループの組み合わせに最低2件以上のデータが必要です。";
+            }
+        }
     }
-    $n = $n_min; // 各セルの繰り返し数 (ここでは均等と仮定)
 
-    // 全体の平均
-    $grand_mean = array_sum($all_values) / $N;
+    $a = count($factorA_levels);
+    $b = count($factorB_levels);
+    $N = count($all_values);
+    if($a < 2 || $b < 2) return "各要因に2つ以上の水準が必要です。";
 
-    // 各セルの統計量
+    $grand_total = array_sum($all_values);
+    $grand_mean = $grand_total / $N;
+    
+    $ss_total = 0;
+    foreach($all_values as $val) $ss_total += pow($val - $grand_mean, 2);
+
+    $row_totals = []; $row_counts = [];
+    $col_totals = []; $col_counts = [];
     $cell_stats = [];
+
+    foreach ($factorA_levels as $a_level) {
+        $row_totals[$a_level] = 0; $row_counts[$a_level] = 0;
+    }
+    foreach ($factorB_levels as $b_level) {
+        $col_totals[$b_level] = 0; $col_counts[$b_level] = 0;
+    }
+
     $ss_error = 0;
     foreach ($factorA_levels as $a_level) {
         foreach ($factorB_levels as $b_level) {
             $values = $cells[$a_level][$b_level];
-            $mean = array_sum($values) / $n;
-            $sum_sq_dev = 0;
-            foreach ($values as $val) {
-                $sum_sq_dev += pow($val - $mean, 2);
-            }
-            $cell_stats[$a_level][$b_level] = ['mean' => $mean, 'ss' => $sum_sq_dev];
-            $ss_error += $sum_sq_dev;
+            $n = count($values);
+            $sum = array_sum($values);
+            $mean = $sum / $n;
+            $ss = 0;
+            foreach($values as $v) $ss += pow($v - $mean, 2);
+            
+            $cell_stats[$a_level][$b_level] = ['mean' => $mean, 'n' => $n, 'sum' => $sum];
+            $row_totals[$a_level] += $sum; $row_counts[$a_level] += $n;
+            $col_totals[$b_level] += $sum; $col_counts[$b_level] += $n;
+            $ss_error += $ss;
         }
     }
 
-    // 要因A, Bの主効果の計算
     $ss_a = 0;
-    $means_a = [];
-    foreach($factorA_levels as $a_level) {
-        $sum_a = 0;
-        foreach($factorB_levels as $b_level) {
-            $sum_a += array_sum($cells[$a_level][$b_level]);
-        }
-        $means_a[$a_level] = $sum_a / ($b * $n);
-        $ss_a += pow($sum_a, 2);
-    }
-    $ss_a = ($ss_a / ($b * $n)) - (pow(array_sum($all_values), 2) / $N);
+    foreach($row_totals as $a_level => $total) $ss_a += pow($total, 2) / $row_counts[$a_level];
+    $ss_a -= pow($grand_total, 2) / $N;
 
     $ss_b = 0;
-    $means_b = [];
-    foreach($factorB_levels as $b_level) {
-        $sum_b = 0;
-        foreach($factorA_levels as $a_level) {
-           $sum_b += array_sum($cells[$a_level][$b_level]);
+    foreach($col_totals as $b_level => $total) $ss_b += pow($total, 2) / $col_counts[$b_level];
+    $ss_b -= pow($grand_total, 2) / $N;
+
+    $ss_cells = 0;
+    foreach($cell_stats as $a_level => $b_data){
+        foreach($b_data as $b_level => $stats){
+            $ss_cells += pow($stats['sum'], 2) / $stats['n'];
         }
-       $means_b[$b_level] = $sum_b / ($a * $n);
-       $ss_b += pow($sum_b, 2);
     }
-    $ss_b = ($ss_b / ($a * $n)) - (pow(array_sum($all_values), 2) / $N);
-    
-    // 全平方和
-    $ss_total = 0;
-    foreach($all_values as $val) {
-        $ss_total += pow($val - $grand_mean, 2);
-    }
+    $ss_cells -= pow($grand_total, 2) / $N;
 
-    // 交互作用の平方和
-    $ss_ab = $ss_total - $ss_a - $ss_b - $ss_error;
+    $ss_ab = $ss_cells - $ss_a - $ss_b;
 
-    // 自由度
     $df_a = $a - 1;
     $df_b = $b - 1;
     $df_ab = ($a - 1) * ($b - 1);
     $df_error = $N - ($a * $b);
     
-    if ($df_a <= 0 || $df_b <= 0 || $df_ab <= 0 || $df_error <= 0) return "自由度の計算に問題が発生しました。";
-
-    // 平均平方
+    if ($df_a <= 0 || $df_b <= 0 || $df_ab < 0 || $df_error <= 0) return "自由度の計算に問題が発生しました。";
+    
     $ms_a = $ss_a / $df_a;
     $ms_b = $ss_b / $df_b;
-    $ms_ab = $ss_ab / $df_ab;
+    $ms_ab = $df_ab > 0 ? $ss_ab / $df_ab : 0;
     $ms_error = $ss_error / $df_error;
 
-    // F値
     $f_a = $ms_error > 0 ? $ms_a / $ms_error : 0;
     $f_b = $ms_error > 0 ? $ms_b / $ms_error : 0;
     $f_ab = $ms_error > 0 ? $ms_ab / $ms_error : 0;
@@ -357,19 +352,23 @@ $active_tab = 'simple'; // デフォルトタブ
 
 // POSTリクエスト処理 (再分析)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // CSRFトークン検証
     if (!validate_csrf_token($_POST['csrf_token'] ?? null)) {
         $error_message = '不正なリクエストです。ページを再読み込みしてください。';
     } else {
-        // タブの状態を維持
         $active_tab = isset($_POST['submit_advanced']) ? 'advanced' : 'simple';
+        $selected_question_key = $_POST['analysis_question'] ?? 'q2';
+        $selected_group_key = $_POST['analysis_group'] ?? 'gender';
+        $factorA_key = $_POST['factor_a'] ?? 'age_group';
+        $factorB_key = $_POST['factor_b'] ?? 'gender';
     }
+} else {
+    $selected_question_key = 'q2';
+    $selected_group_key = 'gender';
+    $factorA_key = 'age_group';
+    $factorB_key = 'gender';
 }
 
-// CSRFトークンを生成してフォームに渡す
 $csrf_token = generate_csrf_token();
-
-// --- データ定義 ---
 $questions_text = [
     'q1' => 'ドキュメンタリー動画への興味', 'q2' => 'VR仮想旅行への興味', 'q3' => '専門的な解説への魅力',
     'q4' => '高画質映像への価値', 'q5' => '月々500円の支払い意欲', 'q6' => '月々1500円の支払い意欲',
@@ -377,14 +376,6 @@ $questions_text = [
 ];
 $group_text_map = ['gender' => '性別', 'age_group' => '年代', 'income_group' => '年収層', 'disability' => '障害有無'];
 
-// フォームから送信された値を取得、なければデフォルト値を設定
-$selected_question_key = $_POST['analysis_question'] ?? 'q2';
-$selected_group_key = $_POST['analysis_group'] ?? 'gender';
-$factorA_key = $_POST['factor_a'] ?? 'age_group';
-$factorB_key = $_POST['factor_b'] ?? 'gender';
-
-
-// --- データ取得実行 ---
 if (!$error_message) {
     $total_count = get_total_count();
     if ($total_count === false) {
@@ -394,26 +385,24 @@ if (!$error_message) {
         $radar_avg_scores = get_radar_avg_scores();
         if ($demographics === false || $radar_avg_scores === false) {
             $error_message = "データの読み込みに失敗しました。";
-            $total_count = 0; // エラー時は以降の処理をスキップ
+            $total_count = 0;
         }
     }
 }
 
-
-// --- 統計分析実行 (管理者・編集者のみ) ---
 if (!$error_message && in_array($_SESSION['role'], ['admin', 'editor'])) {
     if ($total_count > 10) {
         $survey_data = get_all_survey_data();
         if ($survey_data === false) {
             $error_message = "分析用データの読み込みに失敗しました。";
         } else {
-            // 一元配置分散分析
+            // 一元配置
             $anova_result = calculate_anova($survey_data, $selected_group_key, $selected_question_key);
             if ($anova_result && $anova_result['significance_level'] > 0) {
                 $tukey_result = calculate_tukey_hsd($anova_result['groups'], $anova_result['ms_within'], $anova_result['df_within']);
             }
 
-            // 二元配置分散分析
+            // 二元配置
             if ($total_count > 20) {
                 if ($factorA_key === $factorB_key) {
                     $anova2_error_message = "要因Aと要因Bには異なるグループを選択してください。";
@@ -425,19 +414,18 @@ if (!$error_message && in_array($_SESSION['role'], ['admin', 'editor'])) {
                         $anova2_error_message = $anova2_raw_result;
                     }
                 }
+            } else {
+                $anova2_error_message = "二元配置分散分析には、さらに多くのデータ(最低20件以上)が必要です。";
             }
         }
     }
 }
 
-
-// --- グラフデータ準備 ---
+// グラフデータ準備
 if ($anova_result) {
     $groups_for_chart = [];
     foreach (($anova_result['groups'] ?? []) as $group_name => $values) {
-        if (count($values) > 0) {
-            $groups_for_chart[$group_name] = array_sum($values) / count($values);
-        }
+        if (count($values) > 0) $groups_for_chart[$group_name] = array_sum($values) / count($values);
     }
     ksort($groups_for_chart);
     $chart_labels = array_keys($groups_for_chart);
@@ -452,10 +440,6 @@ if ($anova2_result) {
         $interaction_plot_data[] = $dataset;
     }
 }
-
-// =================================================================
-//  4. ビュー (HTML)
-// =================================================================
 ?>
 <!DOCTYPE html>
 <html lang="ja">
@@ -494,7 +478,6 @@ if ($anova2_result) {
                 <a href="manage_users.php" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg text-sm">ユーザー管理</a>
             <?php endif; ?>
             <a href="index.php" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">アンケートトップ</a>
-            
             <div class="ml-auto flex items-center gap-4">
                 <span class="font-bold">ダウンロード:</span>
                 <?php if (in_array($_SESSION['role'], ['admin', 'editor'])): ?>
@@ -506,34 +489,18 @@ if ($anova2_result) {
             </div>
         </nav>
 
-        <?php if (isset($_SESSION['error'])): ?>
-            <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg shadow-md" role="alert">
-                <p><?php echo h($_SESSION['error']); ?></p>
-            </div>
-            <?php unset($_SESSION['error']); ?>
-        <?php endif; ?>
         <?php if ($error_message): ?>
-            <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-6 rounded-lg shadow-md text-center">
-                <p class="font-bold text-lg">エラー</p>
-                <p class="mt-2"><?php echo h($error_message); ?></p>
-            </div>
+            <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-6 rounded-lg shadow-md text-center"><p class="font-bold text-lg">エラー</p><p class="mt-2"><?php echo h($error_message); ?></p></div>
         <?php endif; ?>
 
         <p class="text-center text-gray-600 mb-6">世界遺産コンテンツに関するアンケート結果 (総回答者数: <?php echo h($total_count); ?>名)</p>
 
         <?php if ($_SESSION['role'] === 'viewer'): ?>
-            <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-6 rounded-lg shadow-md text-center">
-                <p class="font-bold text-lg">詳細な分析機能の閲覧権限がありません。</p>
-                <p class="mt-2">全体の集計データのみ表示しています。</p>
-            </div>
+            <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-6 rounded-lg shadow-md text-center"><p class="font-bold text-lg">詳細な分析機能の閲覧権限がありません。</p><p class="mt-2">全体の集計データのみ表示しています。</p></div>
         <?php endif; ?>
 
         <?php if ($total_count < 10): ?>
-            <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-6 rounded-lg shadow-md text-center mt-6">
-                <p class="font-bold text-lg">まだ回答データが十分ではありません (現在 <?php echo h($total_count); ?> 件)。</p>
-                <p class="mt-2">詳細な分析には最低10件程度のデータが必要です。</p>
-                <a href="index.php" class="mt-4 inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-md">アンケートに回答する</a>
-            </div>
+            <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-6 rounded-lg shadow-md text-center mt-6"><p class="font-bold text-lg">まだ回答データが十分ではありません (現在 <?php echo h($total_count); ?> 件)。</p><p class="mt-2">詳細な分析には最低10件程度のデータが必要です。</p><a href="index.php" class="mt-4 inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-md">アンケートに回答する</a></div>
         <?php else: ?>
             <div class="mb-8 mt-6">
                 <h2 class="text-2xl font-bold mb-4 text-gray-700 border-b-2 pb-2">全体集計データ</h2>
@@ -575,7 +542,7 @@ if ($anova2_result) {
                                             <tr><th>残差 (群内)</th><td><?php echo round($anova_result['ss_within'], 2); ?></td><td><?php echo $anova_result['df_within']; ?></td><td><?php echo round($anova_result['ms_within'], 2); ?></td><td>-</td></tr>
                                         </tbody>
                                     </table>
-                                    <p class="text-xs mt-2 text-gray-600">* p < 0.05, ** p < 0.01 (簡易判定)</p>
+                                    <p class="text-xs mt-2 text-gray-600">* p &lt; 0.05, ** p &lt; 0.01 (簡易判定)</p>
 
                                     <?php if ($tukey_result): ?>
                                     <h3 class="font-semibold mb-2 mt-6">多重比較 (Tukey's HSD) 結果</h3>
@@ -583,11 +550,7 @@ if ($anova2_result) {
                                         <thead><tr><th>比較</th><th>平均差</th><th>有意差</th></tr></thead>
                                         <tbody>
                                             <?php foreach($tukey_result as $comp): ?>
-                                            <tr class="<?php if($comp['significant']) echo 'significant'; ?>">
-                                                <th><?php echo h($comp['group1']); ?> vs <?php echo h($comp['group2']); ?></th>
-                                                <td><?php echo round($comp['diff'], 2); ?></td>
-                                                <td><?php echo $comp['significant'] ? 'あり' : 'なし'; ?></td>
-                                            </tr>
+                                            <tr class="<?php if($comp['significant']) echo 'significant'; ?>"><th><?php echo h($comp['group1']); ?> vs <?php echo h($comp['group2']); ?></th><td><?php echo round($comp['diff'], 2); ?></td><td><?php echo $comp['significant'] ? 'あり' : 'なし'; ?></td></tr>
                                             <?php endforeach; ?>
                                         </tbody>
                                     </table>
@@ -628,53 +591,39 @@ if ($anova2_result) {
                                 </div>
                             </div>
                         <?php else: ?>
-                            <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-6 rounded-lg shadow-md text-center">
-                                <p class="font-bold">二元配置分散分析を実行できません。</p>
-                                <?php if ($anova2_error_message): ?>
-                                    <p class="mt-2 text-sm text-red-600 font-semibold"><?php echo h($anova2_error_message); ?></p>
-                                <?php else: ?>
-                                    <p class="mt-2 text-sm">各グループの組み合わせに、最低2件以上のデータが必要です。データ数を増やすか、別の組み合わせをお試しください。</p>
-                                <?php endif; ?>
-                            </div>
+                            <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-6 rounded-lg shadow-md text-center"><p class="font-bold">二元配置分散分析を実行できません。</p><?php if ($anova2_error_message): ?><p class="mt-2 text-sm text-red-600 font-semibold"><?php echo h($anova2_error_message); ?></p><?php else: ?><p class="mt-2 text-sm">各グループの組み合わせに、最低2件以上のデータが必要です。データ数を増やすか、別の組み合わせをお試しください。</p><?php endif; ?></div>
                         <?php endif; ?>
                     </div>
                 </div>
             <?php endif; ?>
         <?php endif; ?>
     </div>
-
     <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Tab logic
         const tabs = document.querySelectorAll('.tab-button');
         tabs.forEach(tab => {
             tab.addEventListener('click', () => {
                 const target = document.querySelector(tab.dataset.tabTarget);
-                document.querySelectorAll('.tab-content').forEach(content => content.classList.add('hidden'));
-                if (target) target.classList.remove('hidden');
-                tabs.forEach(t => { t.classList.remove('active'); });
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+                if(target) target.classList.remove('hidden');
+                tabs.forEach(t => t.classList.remove('active'));
                 tab.classList.add('active');
             });
         });
-
-        const pieChartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { padding: 15 } } } };
+        const pieOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { padding: 15 } } } };
         const pieColors = ['#60A5FA', '#F87171', '#4ADE80', '#FBBF24', '#A78BFA', '#F472B6'];
-
         <?php if ($total_count > 0 && !empty($demographics)): ?>
-            if (document.getElementById('genderChart') && <?php echo json_encode(!empty($demographics['gender'])); ?>) { new Chart(document.getElementById('genderChart'), { type: 'pie', data: { labels: <?php echo json_encode(array_keys($demographics['gender'])); ?>, datasets: [{ data: <?php echo json_encode(array_values($demographics['gender'])); ?>, backgroundColor: pieColors }] }, options: pieChartOptions }); }
-            if (document.getElementById('ageChart') && <?php echo json_encode(!empty($demographics['age'])); ?>) { new Chart(document.getElementById('ageChart'), { type: 'pie', data: { labels: <?php echo json_encode(array_keys($demographics['age'])); ?>, datasets: [{ data: <?php echo json_encode(array_values($demographics['age'])); ?>, backgroundColor: pieColors }] }, options: pieChartOptions }); }
-            if (document.getElementById('incomeChart') && <?php echo json_encode(!empty($demographics['income'])); ?>) { new Chart(document.getElementById('incomeChart'), { type: 'pie', data: { labels: <?php echo json_encode(array_keys($demographics['income'])); ?>, datasets: [{ data: <?php echo json_encode(array_values($demographics['income'])); ?>, backgroundColor: pieColors }] }, options: pieChartOptions }); }
-            
-            if (document.getElementById('radarChart') && <?php echo json_encode(!empty($radar_avg_scores)); ?>) { new Chart(document.getElementById('radarChart'), { type: 'radar', data: { labels: <?php echo json_encode(array_values($questions_text)); ?>, datasets: [{ label: '全体の平均評価点', data: <?php echo json_encode($radar_avg_scores); ?>, fill: true, backgroundColor: 'rgba(59, 130, 246, 0.2)', borderColor: 'rgb(59, 130, 246)', pointBackgroundColor: 'rgb(59, 130, 246)' }] }, options: { scales: { r: { beginAtZero: true, max: 5, pointLabels: { font: { size: window.innerWidth > 768 ? 12 : 9 } } } }, plugins: { legend: { position: 'bottom' } } } }); }
+            if (document.getElementById('genderChart') && <?php echo json_encode(!empty($demographics['gender'])); ?>) { new Chart('genderChart', { type: 'pie', data: { labels: <?php echo json_encode(array_keys($demographics['gender'])); ?>, datasets: [{ data: <?php echo json_encode(array_values($demographics['gender'])); ?>, backgroundColor: pieColors }] }, options: pieOptions }); }
+            if (document.getElementById('ageChart') && <?php echo json_encode(!empty($demographics['age'])); ?>) { new Chart('ageChart', { type: 'pie', data: { labels: <?php echo json_encode(array_keys($demographics['age'])); ?>, datasets: [{ data: <?php echo json_encode(array_values($demographics['age'])); ?>, backgroundColor: pieColors }] }, options: pieOptions }); }
+            if (document.getElementById('incomeChart') && <?php echo json_encode(!empty($demographics['income'])); ?>) { new Chart('incomeChart', { type: 'pie', data: { labels: <?php echo json_encode(array_keys($demographics['income'])); ?>, datasets: [{ data: <?php echo json_encode(array_values($demographics['income'])); ?>, backgroundColor: pieColors }] }, options: pieOptions }); }
+            if (document.getElementById('radarChart') && <?php echo json_encode(!empty($radar_avg_scores)); ?>) { new Chart('radarChart', { type: 'radar', data: { labels: <?php echo json_encode(array_values($questions_text)); ?>, datasets: [{ label: '全体の平均評価点', data: <?php echo json_encode($radar_avg_scores); ?>, fill: true, backgroundColor: 'rgba(59, 130, 246, 0.2)', borderColor: 'rgb(59, 130, 246)', pointBackgroundColor: 'rgb(59, 130, 246)' }] }, options: { scales: { r: { beginAtZero: true, max: 5, pointLabels: { font: { size: window.innerWidth > 768 ? 12 : 9 } } } }, plugins: { legend: { position: 'bottom' } } } }); }
         <?php endif; ?>
-
         <?php if ($anova_result && !empty($chart_data)): ?>
-            if (document.getElementById('crossAnalysisChart')) { new Chart(document.getElementById('crossAnalysisChart'), { type: 'bar', data: { labels: <?php echo json_encode($chart_labels); ?>, datasets: [{ label: '平均評価点', data: <?php echo json_encode($chart_data); ?>, backgroundColor: pieColors }] }, options: { indexAxis: 'y', scales: { x: { beginAtZero: true, max: 5 } }, plugins: { legend: { display: false } } } }); }
+            if (document.getElementById('crossAnalysisChart')) { new Chart('crossAnalysisChart', { type: 'bar', data: { labels: <?php echo json_encode($chart_labels); ?>, datasets: [{ label: '平均評価点', data: <?php echo json_encode($chart_data); ?>, backgroundColor: pieColors }] }, options: { indexAxis: 'y', scales: { x: { beginAtZero: true, max: 5 } }, plugins: { legend: { display: false } } } }); }
         <?php endif; ?>
-
         <?php if ($anova2_result && !empty($interaction_plot_data)): ?>
-            const interactionPlotDatasets = <?php echo json_encode($interaction_plot_data); ?>.map((dataset, index) => ({ ...dataset, borderColor: pieColors[index % pieColors.length], backgroundColor: pieColors[index % pieColors.length], tension: 0.1 }));
-            if (document.getElementById('interactionPlot')) { new Chart(document.getElementById('interactionPlot'), { type: 'line', data: { labels: <?php echo json_encode($anova2_result['factorA_levels']); ?>, datasets: interactionPlotDatasets }, options: { scales: { y: { beginAtZero: true, max: 5, title: { display: true, text: '平均評価点' } } }, plugins: { legend: { position: 'bottom' } } } }); }
+            const interactionPlotDatasets = <?php echo json_encode($interaction_plot_data); ?>.map((ds, i) => ({ ...ds, borderColor: pieColors[i % pieColors.length], backgroundColor: pieColors[i % pieColors.length], tension: 0.1 }));
+            if (document.getElementById('interactionPlot')) { new Chart('interactionPlot', { type: 'line', data: { labels: <?php echo json_encode($anova2_result['factorA_levels']); ?>, datasets: interactionPlotDatasets }, options: { scales: { y: { beginAtZero: true, max: 5, title: { display: true, text: '平均評価点' } } }, plugins: { legend: { position: 'bottom' } } } }); }
         <?php endif; ?>
     });
     </script>
